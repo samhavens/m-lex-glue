@@ -46,7 +46,7 @@ parameters:
     weight_decay: 1.0e-5 # Amount of weight decay regularization
 
   # again, untested
-  max_duration: 10ep
+  max_duration: 5ep
   eval_interval: 1ep
   grad_clip_norm: -1.0
   
