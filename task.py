@@ -96,7 +96,7 @@ def build_scheduler(cfg):
 
 def build_model(cfg: DictConfig, task_name: str):
     config = AutoConfig.from_pretrained(
-        cfg.get("config_name", cfg.model_name_or_path),
+        cfg.model_name,
         num_labels=TASK_NAME_TO_NUM_LABELS[task_name],
         finetuning_task=task_name,
         cache_dir=cfg.get("cache_dir", None),
