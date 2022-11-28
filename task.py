@@ -96,13 +96,13 @@ def build_scheduler(cfg):
 
 def build_model(cfg: DictConfig, task_name: str):
     config = AutoConfig.from_pretrained(
-        cfg.config_name if cfg.config_name else cfg.model_name_or_path,
+        cfg.get("config_name", cfg.model_name_or_path),
         num_labels=TASK_NAME_TO_NUM_LABELS[task_name],
         finetuning_task=task_name,
-        cache_dir=cfg.cache_dir if cfg.cache_dir else None,
-        revision=cfg.model_revision if cfg.model_revision else None,
-        use_auth_token=True if cfg.use_auth_token else None,
-        use_cache=False if cfg.gradient_checkpointing else None,
+        cache_dir=cfg.get("cache_dir", None),
+        revision=cfg.get("model_revision", None),
+        use_auth_token=cfg.get("use_auth_token", None),
+        use_cache=False if cfg.get('gradient_checkpointing', False) else None,
     )
     return get_huggingface_model(cfg, config)
 
