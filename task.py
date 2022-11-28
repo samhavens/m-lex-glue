@@ -99,10 +99,6 @@ def build_model(cfg: DictConfig, task_name: str):
         cfg.model_name,
         num_labels=TASK_NAME_TO_NUM_LABELS[task_name],
         finetuning_task=task_name,
-        cache_dir=cfg.get("cache_dir", None),
-        revision=cfg.get("model_revision", None),
-        use_auth_token=cfg.get("use_auth_token", None),
-        use_cache=False if cfg.get('gradient_checkpointing', False) else None,
     )
     return get_huggingface_model(cfg, config)
 
@@ -114,7 +110,7 @@ def main(task_name: str, cfg: DictConfig) -> None:
 
     # Build Model
     print('Initializing model...')
-    model = build_model(cfg.model, task_name)
+    model = build_model(cfg, task_name)
     n_params = sum(p.numel() for p in model.parameters())
     print(f'{n_params=:.4e}')
 
