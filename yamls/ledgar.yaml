@@ -18,7 +18,7 @@ command: >-
 optimization_level: 0
 parameters:
   task: &task ledgar
-  max_seq_len: &max_seq_len 512  # double check this
+  max_seq_length: 512  # double check this
   model_name: &model_name gpt2-xl
   tokenizer_name: &tokenizer_name gpt2-xl
   # Run Name
