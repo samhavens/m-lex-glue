@@ -120,7 +120,7 @@ def main(task_name: str, cfg: DictConfig) -> None:
 
     # Dataloaders
     print("Building eval loader...")
-    eval_dataset = create_lexglue_dataset(task_name, model.tokenizer, split="eval", max_seq_length=cfg.max_seq_length)
+    eval_dataset = create_lexglue_dataset(task_name, model.tokenizer, split="validation", max_seq_length=cfg.max_seq_length)
     eval_loader = build_dataloader(eval_dataset, device_eval_batch_size)
     print("Building train loader...")
     train_dataset = create_lexglue_dataset(task_name, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
