@@ -1,7 +1,10 @@
 # Copyright 2022 MosaicML Composer authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""The main runner. Spawns MCloud runs for each subtask"""
+"""The main runner. Spawns MCloud runs for each subtask
+
+Unlike our GLUE finetune script, this can be run from anywhere,
+if you are authenticated into MCloud. It is a script which starts MCloud runs"""
 
 from concurrent.futures import Future
 from pathlib import Path
