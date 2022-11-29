@@ -40,7 +40,7 @@ parameters:
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 4e-6
+    lr: 4.0e-6
     betas:
       - 0.9
       - 0.98
