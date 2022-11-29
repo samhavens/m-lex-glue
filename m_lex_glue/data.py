@@ -6,19 +6,19 @@ from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 
-_single_label = (None, "text", "label")  # none, str, int
-_multi_label = (None, "text", "labels")  # none, str, List[int]
-_multiple_choice_qa = ("context", "endings", "label")  # str, str, int
+single_label = (None, "text", "label")  # none, str, int
+multi_label = (None, "text", "labels")  # none, str, List[int]
+multiple_choice_qa = ("context", "endings", "label")  # str, str, int
 
 
-_task_example_types = {
-    'case_hold': _multiple_choice_qa,
-    'ecthr_a': _multi_label,
-    'ecthr_b': _multi_label,
-    'eurlex': _multi_label,
-    'ledgar': _single_label,
-    'scotus': _single_label,
-    'unfair_tos': _multi_label,
+task_example_types = {
+    'case_hold': multiple_choice_qa,
+    'ecthr_a': multi_label,
+    'ecthr_b': multi_label,
+    'eurlex': multi_label,
+    'ledgar': single_label,
+    'scotus': single_label,
+    'unfair_tos': multi_label,
 }
 
 log = logging.getLogger(__name__)
@@ -49,8 +49,8 @@ def create_lexglue_dataset(
     num_workers: int = 0,
 ):
 
-    if task not in _task_example_types:
-        raise ValueError(f'task ({task}) must be one of {_task_example_types.keys()}')
+    if task not in task_example_types:
+        raise ValueError(f'task ({task}) must be one of {task_example_types.keys()}')
 
     if (max_seq_length % 8) != 0:
         log.warning('For performance, a max_seq_length as a multiple of 8 is recommended.')
@@ -65,12 +65,12 @@ def create_lexglue_dataset(
     )
 
     log.info(f'Starting tokenization by preprocessing over {num_workers} threads!')
-    example_type = _task_example_types[task]
+    example_type = task_example_types[task]
 
     def tokenize_function(inp):
         # truncates sentences to max_length or pads them to max_length
 
-        if example_type == _multiple_choice_qa:
+        if example_type == multiple_choice_qa:
             context = inp[example_type[0]]
             endings = inp[example_type[1]]
             if isinstance(context, list):
@@ -87,7 +87,7 @@ def create_lexglue_dataset(
             truncation=True,
         )
 
-    columns_to_remove = ['text'] if example_type != _multiple_choice_qa else ["context", "endings"]
+    columns_to_remove = ['text'] if example_type != multiple_choice_qa else ["context", "endings"]
 
     assert isinstance(dataset, datasets.Dataset)
     dataset = dataset.map(
