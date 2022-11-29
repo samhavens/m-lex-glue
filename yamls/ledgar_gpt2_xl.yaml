@@ -33,12 +33,12 @@ parameters:
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 0.05dur
+    t_warmup: 100ba # was 0.05dur, likely too long
 
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 6.0e-6 # Peak learning rate
+    lr: 6.0e-6 # Peak learning rate, no real justification
     betas:
       - 0.9
       - 0.98
@@ -47,7 +47,7 @@ parameters:
 
   # again, untested
   max_duration: 5ep
-  eval_interval: 1ep
+  eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
   global_train_batch_size: 32
