@@ -33,6 +33,7 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_name,
         use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
+        use_fast=False if "deberta" in cfg.model_name else True  # crazy byte conversion error
     )
     # todo also allow seq2seq
     if task_example_types[cfg.task] == single_label:
