@@ -64,15 +64,15 @@ class FineTuneRun:
 
 
 if __name__ == "__main__":
-    # run sequential or parallel?
-    # this is sequential, use futures for parallel, .create_run(future=True)
+    # this runs sequentially, use futures for parallel execution, .create_run(..., future=True)
     yamls_to_run = sys.argv[1:]
     if len(yamls_to_run) < 7:
         print("Pass a list of yaml files to main.py to run each fine-tuning lex-GLUE job")
     if len(yamls_to_run) == 0:
         print("no yaml files passed, using default yamls")
-        print("NEED TO WRITE DEFAULT YAMLS, only ledgar is currently 'done' (hyperparams untested)")
-        yamls_to_run = ['yamls/ledgar.yaml']
+        print("NEED TO WRITE DEFAULTS")
+        exit()
+        # yamls_to_run = ['yamls/ledgar.yaml']
     run_configs = [FineTuneRun.from_file(f) for f in yamls_to_run]
     for run_conf in run_configs:
         run = run_conf.create_run()
