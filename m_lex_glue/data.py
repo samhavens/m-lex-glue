@@ -2,34 +2,8 @@ import logging
 from typing import List, Union
 
 import datasets
-from datasets.naming import INVALID_WINDOWS_CHARACTERS_IN_PATH
 from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
-
-
-# this is crazy
-def _new_fingerprint_validate(fingerprint: str, max_length=64):
-    """
-    Make sure the fingerprint is a non-empty string that is not longer that max_length=64 by default,
-    so that the fingerprint can be used to name cache files without issues.
-    """
-    if not isinstance(fingerprint, str) or not fingerprint:
-        raise ValueError(f"Invalid fingerprint '{fingerprint}': it should be a non-empty string.")
-    for invalid_char in INVALID_WINDOWS_CHARACTERS_IN_PATH:
-        if invalid_char in fingerprint:
-            # raise ValueError(
-            print(
-                f"Invalid fingerprint. Bad characters from black list '{INVALID_WINDOWS_CHARACTERS_IN_PATH}' found in '{fingerprint}'. "
-                f"They could create issues when creating cache files."
-            )
-    if len(fingerprint) > max_length:
-        raise ValueError(
-            f"Invalid fingerprint. Maximum lenth is {max_length} but '{fingerprint}' has length {len(fingerprint)}."
-            "It could create issues when creating cache files."
-        )
-# work around ValueError: Invalid fingerprint. Bad characters from black list '<>:/\|?*' found in 'ledgar-microsoft/deberta-v2-xlarge-mnli-tokenization-validation'.
-# They could create issues when creating cache files.
-datasets.fingerprint.validate_fingerprint = _new_fingerprint_validate
 
 
 single_label = (None, "text", "label")  # none, str, int
@@ -122,7 +96,7 @@ def create_lexglue_dataset(
         num_proc=None if num_workers == 0 else num_workers,
         batch_size=1000,
         remove_columns=columns_to_remove,
-        new_fingerprint=f'{task}-{tokenizer.name_or_path}-tokenization-{split}',
+        # new_fingerprint=f'{task}-{tokenizer.name_or_path}-tokenization-{split}',
         load_from_cache_file=True,
     )
     return dataset
