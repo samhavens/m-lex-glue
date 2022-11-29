@@ -1,0 +1,75 @@
+# using xl instead of xxl so I can fit whole sequences without OOM
+# hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
+run_name: &run_name lex-glue-ledgar-deberta-v2-xl-4e-6lr-512seql
+gpu_type: a100_40gb
+gpu_num: 8
+platform: r7z2
+image: mosaicml/composer:0.11.1
+integrations:
+  - integration_type: "wandb"
+    project: &wandb_project lex-glue
+    entity: mosaic-ml
+  - integration_type: "git_repo"  # maybe should be replaced with the mcli way of packaging up this repo and shipping it to the cloud
+    git_repo: samhavens/m-lex-glue
+    git_branch: main
+command: >-
+  set -e -x;
+  cd m-lex-glue;
+  pip install -r requirements.txt;
+  composer task.py /mnt/config/parameters.yaml
+optimization_level: 0
+parameters:
+  task: &task ledgar
+  max_seq_length: 512
+  model_name: &model_name microsoft/deberta-v2-xlarge-mnli
+  tokenizer_name: &tokenizer_name microsoft/deberta-v2-xlarge-mnli
+  # Run Name
+  run_name: *run_name
+  # Model
+  model:
+    name: *model_name
+    use_pretrained: true
+    pretrained_model_name: *model_name
+    tokenizer_name: *tokenizer_name
+
+  # need to test lr schedules on lex-glue
+  scheduler:
+    name: constant_with_warmup
+    t_warmup: 50ba # was 0.05dur, likely too long
+
+  # haven't checked these values
+  optimizer:
+    name: decoupled_adamw
+    lr: 4e-6
+    betas:
+      - 0.9
+      - 0.98
+    eps: 1.0e-06
+    weight_decay: 1.0e-5 # Amount of weight decay regularization
+
+  # again, untested
+  max_duration: 8ep
+  eval_interval: 500ba # was 1ep, took too long
+  grad_clip_norm: -1.0
+  
+  global_train_batch_size: 48
+  global_eval_batch_size: 8
+
+  # System
+  seed: 42
+  grad_accum: auto
+  precision: amp
+  # Logging
+  progress_bar: true
+  log_to_console: true
+  callbacks:
+    speed_monitor:
+      window_size: 500
+    lr_monitor: {}
+  loggers:
+    wandb: {}
+  # Checkpoint to local filesystem or remote object store
+  save_interval: 1ep
+  save_num_checkpoints_to_keep: 1
+  # need to set up an s3 folder for myself
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
