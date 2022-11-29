@@ -1,6 +1,6 @@
 # using xl instead of xxl so I can fit whole sequences without OOM
 # hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
-run_name: &run_name lex-glue-ledgar-deberta-v2-xl-4e-6lr-512seql
+run_name: &run_name lex-glue-ledgar-deberta-v3-large-6e-6lr-512seql
 gpu_type: a100_40gb
 gpu_num: 8
 platform: r7z2
@@ -40,7 +40,7 @@ parameters:
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 4e-6
+    lr: 6e-6
     betas:
       - 0.9
       - 0.98
@@ -52,8 +52,8 @@ parameters:
   eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 48
-  global_eval_batch_size: 8
+  global_train_batch_size: 32
+  global_eval_batch_size: 16
 
   # System
   seed: 42
