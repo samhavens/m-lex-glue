@@ -1,5 +1,5 @@
-# using xl instead of xxl so I can fit whole sequences without OOM
-# hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
+# turning up the weight decay and going for longer
+# adding fused layernorm
 run_name: &run_name lex-glue-ledgar-roberta-large-3e-5lr-512seql
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
@@ -32,6 +32,9 @@ parameters:
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
 
+  algorithms:
+    fused_layernorm: {}
+
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
@@ -45,15 +48,15 @@ parameters:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-5 # Amount of weight decay regularization
+    weight_decay: 1.0e-4 # Amount of weight decay regularization, 10x since last trial
 
   # again, untested
-  max_duration: 15ep
+  max_duration: 20ep
   eval_interval: 500ba
   grad_clip_norm: -1.0
   
   global_train_batch_size: 512  # inspired by roberta GLUE then doubled for 80gb
-  global_eval_batch_size: 512
+  global_eval_batch_size: 1024
 
   # System
   seed: 42

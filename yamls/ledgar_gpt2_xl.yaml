@@ -1,4 +1,4 @@
-run_name: &run_name lex-glue-ledgar-gpt2xl-0_2drp-128bs
+run_name: &run_name lex-glue-ledgar-gpt2xl-0-2drp-128bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -35,12 +35,12 @@ parameters:
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 100ba # was 0.05dur, likely too long
+    t_warmup: 500ba # was 0.05dur, likely too long
 
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 6.0e-6  # Peak learning rate, no real justification
+    lr: 3.0e-5  # 4x bs, so... almost 4x lr
     betas:
       - 0.9
       - 0.98
@@ -52,8 +52,8 @@ parameters:
   eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 128  # big for regularizing, memorized too fast
-  global_eval_batch_size: 64
+  global_train_batch_size: 256  # big for regularizing, memorized too fast
+  global_eval_batch_size: 16
 
   # System
   seed: 42
@@ -71,5 +71,4 @@ parameters:
   # Checkpoint to local filesystem or remote object store
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
-  # need to set up an s3 folder for myself
   save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
