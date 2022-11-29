@@ -95,6 +95,7 @@ def build_scheduler(cfg):
 
 
 def build_model(cfg: DictConfig, task_name: str):
+    print(f"Number of labels: {TASK_NAME_TO_NUM_LABELS[task_name]}")
     config = AutoConfig.from_pretrained(
         cfg.model_name,
         num_labels=TASK_NAME_TO_NUM_LABELS[task_name],

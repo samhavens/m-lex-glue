@@ -41,6 +41,7 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
             cfg.model_name,
             config=hf_config,
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
+            ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_example_types[cfg.task] == multi_label:
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -48,6 +49,7 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
             problem_type="multi_label_classification",
             config=hf_config,
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
+            ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_example_types[cfg.task] == multiple_choice_qa:
         if 'gpt' in cfg.model_name:
