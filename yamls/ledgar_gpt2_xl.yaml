@@ -1,7 +1,7 @@
-run_name: &run_name lex-glue-ledgar-384seql-gpt2xl-6e-6lr
-gpu_type: a100_40gb
+run_name: &run_name lex-glue-ledgar-gpt2xl-0_2drp-128bs
+gpu_type: a100_80gb
 gpu_num: 8
-platform: r7z2
+platform: r1z1
 image: mosaicml/composer:0.11.1
 integrations:
   - integration_type: "wandb"
@@ -18,7 +18,7 @@ command: >-
 optimization_level: 0
 parameters:
   task: &task ledgar
-  max_seq_length: 384  # double check this, 512 doesn't fit with BS1
+  max_seq_length: 384
   model_name: &model_name gpt2-xl
   tokenizer_name: &tokenizer_name gpt2-xl
   # Run Name
@@ -29,6 +29,8 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
+    hidden_dropout_prob: 0.2
+    attention_probs_dropout_prob: 0.2
 
   # need to test lr schedules on lex-glue
   scheduler:
@@ -38,7 +40,7 @@ parameters:
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 6.0e-6 # Peak learning rate, no real justification
+    lr: 6.0e-6  # Peak learning rate, no real justification
     betas:
       - 0.9
       - 0.98
@@ -46,16 +48,16 @@ parameters:
     weight_decay: 1.0e-5 # Amount of weight decay regularization
 
   # again, untested
-  max_duration: 5ep
+  max_duration: 15ep
   eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 32
-  global_eval_batch_size: 8
+  global_train_batch_size: 128  # big for regularizing, memorized too fast
+  global_eval_batch_size: 64
 
   # System
   seed: 42
-  grad_accum: 4
+  grad_accum: auto
   precision: amp
   # Logging
   progress_bar: true
