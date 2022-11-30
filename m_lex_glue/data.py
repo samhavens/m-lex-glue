@@ -7,6 +7,7 @@ from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from m_lex_glue.casehold_helpers import MultipleChoiceDataset, format_casehold_batched, format_casehold_input
+from m_lex_glue.labels import UNFAIR_CATEGORIES
 
 
 single_label = (None, "text", "label")  # none, str, int
@@ -27,7 +28,7 @@ task_example_types = {
 log = logging.getLogger(__name__)
 
 
-def get_preprocessor(example_type, tokenizer, max_seq_length):
+def get_preprocessor(task, example_type, tokenizer, max_seq_length):
 
     def tokenize_function(inp):
         if example_type == multiple_choice_qa:
@@ -47,15 +48,27 @@ def get_preprocessor(example_type, tokenizer, max_seq_length):
             padding='max_length',
             max_length=max_seq_length,
             truncation=True,
-            return_tensors="pt",
         )
 
         if example_type == multi_label:
-            label_list = list(range(8))  # this is for unfair_tos
-            labels = [[1 if label in labels else 0 for label in label_list] for labels in
-                              inp["labels"]]
-            labels = [torch.tensor(label, dtype=torch.float) for label in labels]
-            batch['labels'] = labels
+            if task == "unfair_tos":
+                label_list = [i for i, _ in enumerate(UNFAIR_CATEGORIES)]
+                id2label = {idx:label for idx, label in enumerate(UNFAIR_CATEGORIES)}
+                label2id = {label:idx for idx, label in enumerate(UNFAIR_CATEGORIES)}
+            else:
+                #@TODO
+                pass
+            # create array of shape (batch_size, num_labels)
+            labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.float)
+            # inp[labels] is a list because this is a batch
+            for idx, labels in enumerate(inp['targets']):
+            # for idx, labels in enumerate(inp['labels']):
+                labels_matrix[idx] = torch.tensor(
+                    [1.0 if label in labels else 0.0 for label in label_list],
+                    dtype=torch.float
+                )
+
+            batch["labels"] = labels_matrix
         return batch
 
     return tokenize_function
@@ -103,7 +116,11 @@ def create_lexglue_dataset(
 
     assert isinstance(dataset, datasets.Dataset)
 
-    pre_process_fn = get_preprocessor(example_type, tokenizer, max_seq_length)
+    pre_process_fn = get_preprocessor(task, example_type, tokenizer, max_seq_length)
+
+    if example_type == multi_label:
+        dataset = dataset.rename_column("labels", "targets")  # it forces label column to be CLassList
+        columns_to_remove.append("targets")
 
     dataset = dataset.map(
         pre_process_fn,
@@ -115,7 +132,6 @@ def create_lexglue_dataset(
         load_from_cache_file=True,
     )
 
-    # for index in random.sample(range(len(dataset)), 3):
-    #     print((f"Sample {index} of the training set: {dataset[index]}."))
+    dataset.set_format(type="torch")
 
     return dataset

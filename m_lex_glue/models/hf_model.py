@@ -1,21 +1,41 @@
 from omegaconf import DictConfig
+from torch import Tensor
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification.f_beta import F1Score
 from transformers import AutoConfig, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoTokenizer
 
-from transformers.configuration_utils import PretrainedConfig
+from composer.loss import binary_cross_entropy_with_logits
 from composer.models import HuggingFaceModel
-from composer.metrics import CrossEntropy
+from composer.metrics import CrossEntropy, LossMetric
 
 from m_lex_glue.data import single_label, multi_label, multiple_choice_qa, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_NUM_LABELS
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
+
 
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
     """Attach the tokenizer to the model so it is easily available to pass to the dataloader builder"""
     def __init__(self, *args, **kwargs):
         self.tokenizer = kwargs['tokenizer']
         super().__init__(*args, **kwargs)
+
+
+class FloatAccuracy(Accuracy):
+    """For Multi-label classification, torchmetrics requires that the target tensor be a torch.int
+    however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
+    So this class converts the target to an int tensor before computing metrics"""
+    def update(self, preds: Tensor, target: Tensor) -> None:
+        target = target.int()
+        return super().update(preds, target)
+
+
+class FloatF1(F1Score):
+    """For Multi-label classification, torchmetrics requires that the target tensor be a torch.int
+    however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
+    So this class converts the target to an int tensor before computing metrics"""
+    def update(self, preds: Tensor, target: Tensor) -> None:
+        target = target.int()
+        return super().update(preds, target)
 
 
 def get_huggingface_model(cfg: DictConfig):
@@ -54,7 +74,11 @@ def get_huggingface_model(cfg: DictConfig):
             problem_type="multi_label_classification",
             finetuning_task=cfg.task,
         )
-        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
+        metrics = [
+            LossMetric(binary_cross_entropy_with_logits),
+            FloatAccuracy(task="multilabel"),
+            FloatF1(num_classes=hf_config.num_labels, average="macro", task="multilabel")
+        ]
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
             config=hf_config,
