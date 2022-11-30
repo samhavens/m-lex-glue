@@ -1,8 +1,8 @@
-from lib2to3.pgen2 import token
 import logging
 from typing import List, Union
 
 import datasets
+import torch
 from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
 
@@ -25,6 +25,40 @@ task_example_types = {
 }
 
 log = logging.getLogger(__name__)
+
+
+def get_preprocessor(example_type, tokenizer, max_seq_length):
+
+    def tokenize_function(inp):
+        if example_type == multiple_choice_qa:
+            # the only MCQA is Casehold, and we already returned that dataloader
+            # we would get to this branch once we do seq2seq eval
+            context = inp[example_type[0]]
+            endings = inp[example_type[1]]
+            if isinstance(context, list):
+                text = format_casehold_batched(context, endings)
+            else:
+                text = format_casehold_input(context, endings)
+        else:
+            text = inp[example_type[1]]
+
+        batch = tokenizer(
+            text=text,
+            padding='max_length',
+            max_length=max_seq_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+
+        if example_type == multi_label:
+            label_list = list(range(8))  # this is for unfair_tos
+            labels = [[1 if label in labels else 0 for label in label_list] for labels in
+                              inp["labels"]]
+            labels = [torch.tensor(label, dtype=torch.float) for label in labels]
+            batch['labels'] = labels
+        return batch
+
+    return tokenize_function
 
 
 def create_lexglue_dataset(
@@ -65,33 +99,14 @@ def create_lexglue_dataset(
     log.info(f'Starting tokenization by preprocessing over {num_workers} threads!')
     example_type = task_example_types[task]
 
-    def tokenize_function(inp):
-        # truncates sentences to max_length or pads them to max_length
-
-        if example_type == multiple_choice_qa:
-            # the only MCQA is Caehold, and we already returned that dataloader
-            # we would get to this branch once we do seq2seq eval
-            context = inp[example_type[0]]
-            endings = inp[example_type[1]]
-            if isinstance(context, list):
-                text = format_casehold_batched(context, endings)
-            else:
-                text = format_casehold_input(context, endings)
-        else:
-            text = inp[example_type[1]]
-
-        return tokenizer(
-            text=text,
-            padding='max_length',
-            max_length=max_seq_length,
-            truncation=True,
-        )
-
     columns_to_remove = ['text'] if example_type != multiple_choice_qa else ["context", "endings"]
 
     assert isinstance(dataset, datasets.Dataset)
+
+    pre_process_fn = get_preprocessor(example_type, tokenizer, max_seq_length)
+
     dataset = dataset.map(
-        tokenize_function,
+        pre_process_fn,
         batched=True,
         num_proc=None if num_workers == 0 else num_workers,
         batch_size=1000,
@@ -99,4 +114,8 @@ def create_lexglue_dataset(
         # new_fingerprint=f'{task}-{tokenizer.name_or_path}-tokenization-{split}',
         load_from_cache_file=True,
     )
+
+    # for index in random.sample(range(len(dataset)), 3):
+    #     print((f"Sample {index} of the training set: {dataset[index]}."))
+
     return dataset
