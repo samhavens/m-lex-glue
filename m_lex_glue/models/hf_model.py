@@ -1,13 +1,14 @@
 from omegaconf import DictConfig
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification.f_beta import F1Score
-from transformers import AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoConfig, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoTokenizer
 
 from transformers.configuration_utils import PretrainedConfig
 from composer.models import HuggingFaceModel
 from composer.metrics import CrossEntropy
 
 from m_lex_glue.data import single_label, multi_label, multiple_choice_qa, task_example_types
+from m_lex_glue.labels import TASK_NAME_TO_NUM_LABELS
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
 
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
@@ -17,7 +18,7 @@ class ComposerHFModelWithTokenizer(HuggingFaceModel):
         super().__init__(*args, **kwargs)
 
 
-def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
+def get_huggingface_model(cfg: DictConfig):
     """Instantiate a single label or multi label SequenceClassification hf transformers model,
     or if the task is case_hold, a MultipleChoice model.
 
@@ -25,9 +26,6 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
 
     Then wrap these as Composer models, with the Tokenizer stored as a property
     """
-
-    metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
-
     tokenizer_name = cfg.get('tokenizer_name', cfg.model_name)
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -37,6 +35,12 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
     )
     # todo also allow seq2seq
     if task_example_types[cfg.task] == single_label:
+        hf_config  = AutoConfig.from_pretrained(
+            cfg.model_name,
+            num_labels=TASK_NAME_TO_NUM_LABELS[cfg.task],
+            finetuning_task=cfg.task,
+        )
+        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
             config=hf_config,
@@ -44,14 +48,25 @@ def get_huggingface_model(cfg: DictConfig, hf_config: PretrainedConfig):
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_example_types[cfg.task] == multi_label:
+        hf_config  = AutoConfig.from_pretrained(
+            cfg.model_name,
+            num_labels=TASK_NAME_TO_NUM_LABELS[cfg.task],
+            problem_type="multi_label_classification",
+            finetuning_task=cfg.task,
+        )
+        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
-            problem_type="multi_label_classification",
             config=hf_config,
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_example_types[cfg.task] == multiple_choice_qa:
+        hf_config  = AutoConfig.from_pretrained(
+            cfg.model_name,
+            finetuning_task=cfg.task,
+        )
+        metrics = [CrossEntropy(), Accuracy()]
         if 'gpt' in cfg.model_name:
             model = GPT2ForMultipleChoice.from_pretrained(
                 cfg.model_name,
