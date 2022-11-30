@@ -1,9 +1,12 @@
+from lib2to3.pgen2 import token
 import logging
 from typing import List, Union
 
 import datasets
 from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
+
+from m_lex_glue.casehold_helpers import MultipleChoiceDataset, format_casehold_batched, format_casehold_input
 
 
 single_label = (None, "text", "label")  # none, str, int
@@ -24,22 +27,6 @@ task_example_types = {
 log = logging.getLogger(__name__)
 
 
-def format_casehold_input(context: str, endings: List[str]) -> str:
-    t = "Context: "
-    t += context
-    t += "\n\n"
-    t += "Which of the following follow from the context?\n"
-    for i, end in enumerate(endings):
-        t += f"{i}: {end}\n"
-    return t
-
-
-def format_casehold_batched(context: List[str], endings: List[List[str]]):
-    return [format_casehold_input(c, e) for c, e in zip(context, endings)]
-
-
-# this assumes we want to do classification, not treat as seq2seq
-# todo add seq2seq support
 def create_lexglue_dataset(
     task: str,
     tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
@@ -57,6 +44,17 @@ def create_lexglue_dataset(
 
     log.info(f'Loading {task.upper()} on rank {dist.get_global_rank()}')
     download_config = datasets.DownloadConfig(max_retries=max_retries)
+
+    if task == "case_hold":
+        # For now we treat this like sequence classification, using
+        # AutoModelForMultipleChoice models
+        return MultipleChoiceDataset(
+            tokenizer=tokenizer,
+            task=task,
+            max_seq_length=max_seq_length,
+            split=split,
+        )
+
     dataset = datasets.load_dataset(
         'lex_glue',
         task,
@@ -71,6 +69,8 @@ def create_lexglue_dataset(
         # truncates sentences to max_length or pads them to max_length
 
         if example_type == multiple_choice_qa:
+            # the only MCQA is Caehold, and we already returned that dataloader
+            # we would get to this branch once we do seq2seq eval
             context = inp[example_type[0]]
             endings = inp[example_type[1]]
             if isinstance(context, list):
