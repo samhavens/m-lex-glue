@@ -1,4 +1,4 @@
-run_name: &run_name lex-glue-scotus-roberta-1024seq-3e5lr-1e5wd-256bs
+run_name: &run_name lex-glue-scotus-roberta-512seq-3e5lr-1e6wd-256bs
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
 platform: r1z1 #NOTE
@@ -46,13 +46,13 @@ parameters:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-5
+    weight_decay: 1.0e-6
 
   max_duration: 20ep  # need to go for a long time with large weight decay
   eval_interval: 500ba
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 128
+  global_train_batch_size: 256
   global_eval_batch_size: 256
 
   # System
