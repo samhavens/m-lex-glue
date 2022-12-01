@@ -38,7 +38,7 @@ parameters:
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 0.1dur  # guess
+    t_warmup: 0.08dur  # guess
 
   # haven't checked these values
   optimizer:
@@ -51,7 +51,7 @@ parameters:
     weight_decay: 1.0e-5
 
   max_duration: 30ep
-  eval_interval: 500ba
+  eval_interval: 1ep
   grad_clip_norm: -1.0
   
   global_train_batch_size: 256 
