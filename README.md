@@ -2,7 +2,11 @@
 
 This repo uses the [Mosaic CLI](https://internal.mcli.docs.mosaicml.com/index.html) to run [lex-GLUE](https://huggingface.co/datasets/lex_glue) fine-tuning and evaluation on the Mosaic Cloud.
 
-Currently there is a complete YAML for the LEDGAR task.
+Currently there are working YAMLs for the tasks:
+* ledgar
+* unfair_tos
+
+All tasks other than case_hold _should_ work, (and maybe even case_hold, but I haven't tested my gpt_for_multiple_choice code yet), but most we should not be able to replicate the reported numbers since the authors said they used e.g. BERT when they in fact used a custom transformer model based on BERT. Fun!
 
 ## Notes on tasks
 
