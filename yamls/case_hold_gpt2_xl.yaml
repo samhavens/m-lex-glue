@@ -1,9 +1,7 @@
-# turning up the weight decay and going for longer
-# adding fused layernorm
-run_name: &run_name unfair-tos-roberta-lg-no-drp-3e5lr-1e5wd
-gpu_type: a100_80gb  #NOTE
+run_name: &run_name lex-glue-case-hold-gpt2xl-384sl-3e5lr-256bs
+gpu_type: a100_80gb
 gpu_num: 8
-platform: r1z1 #NOTE
+platform: r1z1
 image: mosaicml/composer:0.11.1
 integrations:
   - integration_type: "wandb"
@@ -19,10 +17,10 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task unfair_tos
-  max_seq_length: 256
-  model_name: &model_name roberta-large
-  tokenizer_name: &tokenizer_name roberta-large
+  task: &task case_hold
+  max_seq_length: 384
+  model_name: &model_name gpt2-xl
+  tokenizer_name: &tokenizer_name gpt2-xl
   # Run Name
   run_name: *run_name
   # Model
@@ -32,28 +30,28 @@ parameters:
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
 
-  algorithms:
-    fused_layernorm: {}
-
+  # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 100ba
+    t_warmup: 0.1dur
 
+  # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5
+    lr: 3.0e-5  # 4x bs, so... almost 4x lr
     betas:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-5
+    weight_decay: 1.0e-5 # Amount of weight decay regularization
 
-  max_duration: 30ep
-  eval_interval: 500ba
+  # again, untested
+  max_duration: 15ep
+  eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
-
-  global_train_batch_size: 512 
-  global_eval_batch_size: 1024
+  
+  global_train_batch_size: 256
+  global_eval_batch_size: 16
 
   # System
   seed: 42
@@ -71,5 +69,4 @@ parameters:
   # Checkpoint to local filesystem or remote object store
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
-  # need to set up an s3 folder for myself
   save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints

@@ -1,6 +1,6 @@
 # turning up the weight decay and going for longer
 # adding fused layernorm
-run_name: &run_name unfair-tos-roberta-lg-no-drp-3e5lr-1e5wd
+run_name: &run_name lex-glue-scotus-roberta-1024seq-3e5lr-1e5wd-256bs
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
 platform: r1z1 #NOTE
@@ -19,8 +19,8 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task unfair_tos
-  max_seq_length: 256
+  task: &task scotus
+  max_seq_length: 1024
   model_name: &model_name roberta-large
   tokenizer_name: &tokenizer_name roberta-large
   # Run Name
@@ -35,24 +35,26 @@ parameters:
   algorithms:
     fused_layernorm: {}
 
+  # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 100ba
+    t_warmup: 100ba  # guess
 
+  # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5
+    lr: 3.0e-5  # inspired by roberta GLUE
     betas:
       - 0.9
       - 0.98
     eps: 1.0e-06
     weight_decay: 1.0e-5
 
-  max_duration: 30ep
+  max_duration: 20ep  # need to go for a long time with large weight decay
   eval_interval: 500ba
   grad_clip_norm: -1.0
-
-  global_train_batch_size: 512 
+  
+  global_train_batch_size: 256  # inspired by roberta GLUE
   global_eval_batch_size: 1024
 
   # System
