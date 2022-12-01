@@ -1,5 +1,5 @@
 # pretty much all values are guesses
-run_name: &run_name case_hold-roberta-lg-first
+run_name: &run_name case_hold-roberta-lg-fixed-1
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
 platform: r1z1 #NOTE

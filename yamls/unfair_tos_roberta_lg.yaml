@@ -1,6 +1,6 @@
 # turning up the weight decay and going for longer
 # adding fused layernorm
-run_name: &run_name unfair-tos-roberta-lg-first
+run_name: &run_name unfair-tos-roberta-lg-02clf-drp
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
 platform: r1z1 #NOTE
@@ -31,6 +31,7 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
+    classifier_dropout: 0.2
 
   algorithms:
     fused_layernorm: {}

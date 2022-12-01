@@ -10,6 +10,8 @@ All tasks other than case_hold _should_ work, (and maybe even case_hold, but I h
 
 ## Notes on tasks
 
+Multiple-choice QA is like single label classification, except it needs to make that classification based on a tuple of `(input: str, choices: List[str])` (choices is always length 5). There is a task-specific HF head for this for some models; I wrote one for `gpt` style models but it needs testing.
+
 For length information details, see [the lex-GLUE paper, page 6](https://arxiv.org/pdf/2110.00976.pdf#page=6)
 
 * 'case_hold'
