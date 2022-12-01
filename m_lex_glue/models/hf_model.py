@@ -8,7 +8,7 @@ from composer.loss import binary_cross_entropy_with_logits
 from composer.models import HuggingFaceModel
 from composer.metrics import CrossEntropy, LossMetric
 
-from m_lex_glue.data import single_label, multi_label, multiple_choice_qa, task_example_types
+from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_NUM_LABELS
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
 
@@ -21,7 +21,7 @@ class ComposerHFModelWithTokenizer(HuggingFaceModel):
 
 
 class FloatAccuracy(Accuracy):
-    """For Multi-label classification, torchmetrics requires that the target tensor be a torch.int
+    """For multi-label classification, torchmetrics requires that the target tensor be a torch.int
     however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
     So this class converts the target to an int tensor before computing metrics"""
     def update(self, preds: Tensor, target: Tensor) -> None:
@@ -30,7 +30,7 @@ class FloatAccuracy(Accuracy):
 
 
 class FloatF1(F1Score):
-    """For Multi-label classification, torchmetrics requires that the target tensor be a torch.int
+    """For multi-label classification, torchmetrics requires that the target tensor be a torch.int
     however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
     So this class converts the target to an int tensor before computing metrics"""
     def update(self, preds: Tensor, target: Tensor) -> None:
@@ -54,7 +54,7 @@ def get_huggingface_model(cfg: DictConfig):
         use_fast=False if "deberta" in cfg.model_name else True  # crazy byte conversion error
     )
     # todo also allow seq2seq
-    if task_example_types[cfg.task] == single_label:
+    if task_example_types[cfg.task] == multi_class:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             num_labels=TASK_NAME_TO_NUM_LABELS[cfg.task],

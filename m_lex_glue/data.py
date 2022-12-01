@@ -10,7 +10,7 @@ from m_lex_glue.casehold_helpers import MultipleChoiceDataset, format_casehold_b
 from m_lex_glue.labels import UNFAIR_CATEGORIES
 
 
-single_label = (None, "text", "label")  # none, str, int
+multi_class = (None, "text", "label")  # none, str, int
 multi_label = (None, "text", "labels")  # none, str, List[int]
 multiple_choice_qa = ("context", "endings", "label")  # str, str, int
 
@@ -20,8 +20,8 @@ task_example_types = {
     'ecthr_a': multi_label,
     'ecthr_b': multi_label,
     'eurlex': multi_label,
-    'ledgar': single_label,
-    'scotus': single_label,
+    'ledgar': multi_class,
+    'scotus': multi_class,
     'unfair_tos': multi_label,
 }
 
@@ -59,13 +59,13 @@ def get_preprocessor(task, example_type, tokenizer, max_seq_length):
                 #@TODO
                 pass
             # create array of shape (batch_size, num_labels)
-            labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.float)
+            labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.int)
             # inp[labels] is a list because this is a batch
             for idx, labels in enumerate(inp['targets']):
             # for idx, labels in enumerate(inp['labels']):
                 labels_matrix[idx] = torch.tensor(
-                    [1.0 if label in labels else 0.0 for label in label_list],
-                    dtype=torch.float
+                    [1 if label in labels else 0 for label in label_list],
+                    dtype=torch.int
                 )
 
             batch["labels"] = labels_matrix
@@ -119,6 +119,7 @@ def create_lexglue_dataset(
     pre_process_fn = get_preprocessor(task, example_type, tokenizer, max_seq_length)
 
     if example_type == multi_label:
+        # the dataset which we download has stored information 
         dataset = dataset.rename_column("labels", "targets")  # it forces label column to be CLassList
         columns_to_remove.append("targets")
 

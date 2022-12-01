@@ -38,12 +38,12 @@ parameters:
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 100ba  # guess
+    t_warmup: 0.1dur  # guess
 
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5
+    lr: 4.5e-5  # guess
     betas:
       - 0.9
       - 0.98
@@ -54,8 +54,8 @@ parameters:
   eval_interval: 500ba
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 512 
-  global_eval_batch_size: 1024
+  global_train_batch_size: 256 
+  global_eval_batch_size: 512
 
   # System
   seed: 42

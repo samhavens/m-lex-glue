@@ -21,10 +21,10 @@ For length information details, see [the lex-GLUE paper, page 6](https://arxiv.o
   * type: multi_label
   * notes: most docs < 1000 tokens, but nontrivial long tail up to 3000
 * 'ledgar'
-  * type: single_label
+  * type: multi_class
   * notes: almost all samples < 500 tokens; 100 classes
 * 'scotus'
-  * type: single_label
+  * type: multi_class
   * notes: VERY long, sample just as likely to have 6000 tokens as 500
 * 'unfair_tos'
   * type: multi_label
