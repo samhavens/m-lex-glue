@@ -1,5 +1,3 @@
-# turning up the weight decay and going for longer
-# adding fused layernorm
 run_name: &run_name lex-glue-scotus-roberta-1024seq-3e5lr-1e5wd-256bs
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
@@ -20,7 +18,7 @@ command: >-
 optimization_level: 0
 parameters:
   task: &task scotus
-  max_seq_length: 1024
+  max_seq_length: 512
   model_name: &model_name roberta-large
   tokenizer_name: &tokenizer_name roberta-large
   # Run Name
