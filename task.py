@@ -23,7 +23,7 @@ from composer.loggers import WandBLogger
 import wandb
 
 from m_lex_glue.data import create_lexglue_dataset
-from m_lex_glue.labels import TASK_NAME_TO_NUM_LABELS
+from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.hf_model import get_huggingface_model
 
 
@@ -95,7 +95,7 @@ def build_scheduler(cfg):
 
 
 def build_model(cfg: DictConfig, task_name: str):
-    print(f"Number of labels: {TASK_NAME_TO_NUM_LABELS[task_name]}")
+    print(f"Number of labels: {len(TASK_NAME_TO_LABELS[task_name])}")
     return get_huggingface_model(cfg)
 
 

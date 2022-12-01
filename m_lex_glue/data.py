@@ -7,7 +7,7 @@ from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from m_lex_glue.casehold_helpers import MultipleChoiceDataset, format_casehold_batched, format_casehold_input
-from m_lex_glue.labels import UNFAIR_CATEGORIES
+from m_lex_glue.labels import TASK_NAME_TO_LABELS
 
 
 multi_class = (None, "text", "label")  # none, str, int
@@ -51,16 +51,11 @@ def get_preprocessor(task, example_type, tokenizer, max_seq_length):
         )
 
         if example_type == multi_label:
-            if task == "unfair_tos":
-                label_list = [i for i, _ in enumerate(UNFAIR_CATEGORIES)]
-                id2label = {idx:label for idx, label in enumerate(UNFAIR_CATEGORIES)}
-                label2id = {label:idx for idx, label in enumerate(UNFAIR_CATEGORIES)}
-            else:
-                #@TODO
-                pass
-            # create array of shape (batch_size, num_labels)
+            label_list = [i for i, _ in enumerate(TASK_NAME_TO_LABELS[task])]
+            # id2label = {idx:label for idx, label in enumerate(TASK_NAME_TO_LABELS[task])}
+            # label2id = {label:idx for idx, label in enumerate(TASK_NAME_TO_LABELS[task])}
+            # shape (batch_size, num_labels)
             labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.float)
-            # inp[targets] is a list because this is a batch
             for idx, labels in enumerate(inp['targets']):
                 labels_matrix[idx] = torch.tensor(
                     [1 if label in labels else 0 for label in label_list],
@@ -119,7 +114,7 @@ def create_lexglue_dataset(
 
     if example_type == multi_label:
         # the dataset which we download has stored information 
-        dataset = dataset.rename_column("labels", "targets")  # it forces label column to be CLassList
+        dataset = dataset.rename_column("labels", "targets")  # it forces `label` column to be CLassList
         columns_to_remove.append("targets")
 
     dataset = dataset.map(

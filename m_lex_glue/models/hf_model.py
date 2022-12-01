@@ -9,7 +9,7 @@ from composer.models import HuggingFaceModel
 from composer.metrics import CrossEntropy, LossMetric
 
 from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, task_example_types
-from m_lex_glue.labels import TASK_NAME_TO_NUM_LABELS
+from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
 
 
@@ -57,7 +57,7 @@ def get_huggingface_model(cfg: DictConfig):
     if task_example_types[cfg.task] == multi_class:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
-            num_labels=TASK_NAME_TO_NUM_LABELS[cfg.task],
+            num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
             finetuning_task=cfg.task,
         )
         metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
@@ -70,7 +70,7 @@ def get_huggingface_model(cfg: DictConfig):
     elif task_example_types[cfg.task] == multi_label:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
-            num_labels=TASK_NAME_TO_NUM_LABELS[cfg.task],
+            num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
             problem_type="multi_label_classification",
             finetuning_task=cfg.task,
         )
@@ -89,8 +89,9 @@ def get_huggingface_model(cfg: DictConfig):
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             finetuning_task=cfg.task,
+            num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
         )
-        metrics = [CrossEntropy(), Accuracy()]
+        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
         if 'gpt' in cfg.model_name:
             model = GPT2ForMultipleChoice.from_pretrained(
                 cfg.model_name,
