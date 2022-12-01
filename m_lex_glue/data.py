@@ -59,13 +59,12 @@ def get_preprocessor(task, example_type, tokenizer, max_seq_length):
                 #@TODO
                 pass
             # create array of shape (batch_size, num_labels)
-            labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.int)
-            # inp[labels] is a list because this is a batch
+            labels_matrix = torch.zeros((len(text), len(label_list)), dtype=torch.float)
+            # inp[targets] is a list because this is a batch
             for idx, labels in enumerate(inp['targets']):
-            # for idx, labels in enumerate(inp['labels']):
                 labels_matrix[idx] = torch.tensor(
                     [1 if label in labels else 0 for label in label_list],
-                    dtype=torch.int
+                    dtype=torch.float
                 )
 
             batch["labels"] = labels_matrix
