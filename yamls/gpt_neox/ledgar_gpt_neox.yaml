@@ -1,3 +1,5 @@
+# this doesn't work because there isn't a sequence classification head
+# save for seq2seq
 run_name: &run_name lex-glue-ledgar-gpt-neox-03drp-384bs
 gpu_type: a100_80gb
 gpu_num: 8

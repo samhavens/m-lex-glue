@@ -1,6 +1,9 @@
 # Adapted from https://github.com/mosaicml/benchmarks/blob/main/llm/src/hf_causal_lm.py
 
 from transformers.models.gpt2.modeling_gpt2 import GPT2Block, GPT2LMHeadModel, GPT2Model
+from transformers.models.gptj.modeling_gptj import (GPTJBlock,
+                                                    GPTJForCausalLM,
+                                                    GPTJModel)
 from transformers.models.gpt_neo.modeling_gpt_neo import (GPTNeoBlock,
                                                           GPTNeoForCausalLM,
                                                           GPTNeoModel)
@@ -11,12 +14,14 @@ from transformers.models.gpt_neox.modeling_gpt_neox import (GPTNeoXModel,
 
 _SUPPORTED_HF_MODELS = (
     GPT2Model,
+    GPTJModel,
     GPTNeoModel,
     GPTNeoXModel,
 )
 
 _WEIGHT_TIED_HF_MODELS = (
     GPT2LMHeadModel,
+    GPTJForCausalLM,
     GPTNeoForCausalLM,
     GPTNeoXForCausalLM,
 )
@@ -24,6 +29,7 @@ _WEIGHT_TIED_HF_MODELS = (
 
 _HF_MODEL_BLOCKS = (
     GPT2Block,
+    GPTJBlock,
     GPTNeoBlock,
     GPTNeoXLayer,
 )

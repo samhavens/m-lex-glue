@@ -1,0 +1,75 @@
+# this doesn't work because there isn't a sequence classification head
+# save for seq2seq
+run_name: &run_name lex-glue-ledgar-gpt-j-03drp-384bs
+gpu_type: a100_80gb
+gpu_num: 8
+platform: r1z1
+image: mosaicml/composer:0.11.1
+integrations:
+  - integration_type: "wandb"
+    project: &wandb_project lex-glue
+    entity: mosaic-ml
+  - integration_type: "git_repo"  # should be replaced with local integration
+    git_repo: samhavens/m-lex-glue
+    git_branch: main
+command: >-
+  set -e -x;
+  cd m-lex-glue;
+  pip install -r requirements.txt;
+  composer task.py /mnt/config/parameters.yaml
+optimization_level: 0
+parameters:
+  task: &task ledgar
+  max_seq_length: 384
+  model_name: &model_name EleutherAI/gpt-j-6B
+  tokenizer_name: &tokenizer_name EleutherAI/gpt-j-6B
+  # Run Name
+  run_name: *run_name
+  # Model
+  model:
+    name: *model_name
+    use_pretrained: true
+    pretrained_model_name: *model_name
+    tokenizer_name: *tokenizer_name
+    classifier_dropout: 0.3
+
+  # need to test lr schedules on lex-glue
+  scheduler:
+    name: linear_decay_with_warmup
+    t_warmup: 0.08dur
+
+  # haven't checked these values
+  optimizer:
+    name: decoupled_adamw
+    lr: 3.0e-5
+    betas:
+      - 0.9
+      - 0.98
+    eps: 1.0e-06
+    weight_decay: 1.0e-5 # Amount of weight decay regularization
+
+  # again, untested
+  max_duration: 15ep
+  eval_interval: 1ep
+  grad_clip_norm: -1.0
+  
+  global_train_batch_size: 256  # big for regularizing, memorized too fast
+  global_eval_batch_size: 16
+
+  # System
+  seed: 42
+  grad_accum: auto
+  precision: bf16
+  # Logging
+  progress_bar: true
+  log_to_console: true
+  callbacks:
+    speed_monitor:
+      window_size: 500
+    lr_monitor: {}
+  loggers:
+    wandb: {}
+  # Checkpoint to local filesystem or remote object store
+  save_interval: 1ep
+  save_num_checkpoints_to_keep: 1
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints

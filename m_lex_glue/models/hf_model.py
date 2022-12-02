@@ -10,7 +10,7 @@ from composer.metrics import CrossEntropy, LossMetric
 
 from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
-from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
+from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice, GPTJForMultipleChoice
 from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 
 
@@ -93,8 +93,14 @@ def get_huggingface_model(cfg: DictConfig):
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
         )
         metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
-        if 'gpt' in cfg.model_name:
+        if 'gpt2' in cfg.model_name:
             model = GPT2ForMultipleChoice.from_pretrained(
+                cfg.model_name,
+                config=hf_config,
+                use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
+            )
+        elif 'gptj' in cfg.model_name:
+            model = GPTJForMultipleChoice.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
                 use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
