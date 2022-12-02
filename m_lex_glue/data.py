@@ -69,7 +69,7 @@ def get_preprocessor(task, example_type, tokenizer, max_seq_length):
 
 
 def create_lexglue_dataset(
-    task: str,
+    task: &task str,
     tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
     split: str,
     max_seq_length: int = 512,
