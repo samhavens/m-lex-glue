@@ -92,7 +92,7 @@ class MultipleChoiceDataset(Dataset):
     def __init__(
         self,
         tokenizer: PreTrainedTokenizer,
-        task: &task str,
+        task: str,
         max_seq_length: int,
         overwrite_cache=False,
         split: str = "train",

@@ -104,6 +104,12 @@ def main(task_name: str, cfg: DictConfig) -> None:
     print(om.to_yaml(cfg, resolve=True))
     reproducibility.seed_all(cfg.seed)
 
+    # Read FSDP Config as a dict
+    # Used for large models which do not fit on 1 GPU
+    fsdp_config = cfg.get('fsdp_config', None)
+    fsdp_config = om.to_container(fsdp_config,
+                                  resolve=True) if fsdp_config else None
+
     # Build Model
     print('Initializing model...')
     model = build_model(cfg, task_name)

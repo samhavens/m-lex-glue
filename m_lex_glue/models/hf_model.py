@@ -11,6 +11,7 @@ from composer.metrics import CrossEntropy, LossMetric
 from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice
+from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 
 
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
@@ -113,6 +114,10 @@ def get_huggingface_model(cfg: DictConfig):
     if "gpt" in tokenizer_name or tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         model.config.pad_token_id = model.config.eos_token_id  # type: ignore
+
+    # For very large models which will be distributed over multiple GPUs
+    if is_fsdp_able(model):
+        prepare_hf_model_for_fsdp(model)
 
     return ComposerHFModelWithTokenizer(model=model, tokenizer=tokenizer, metrics=metrics, use_logits=True)
     
