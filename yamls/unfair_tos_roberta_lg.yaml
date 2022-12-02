@@ -1,4 +1,4 @@
-run_name: &run_name unfair-tos-roberta-lg-03-drp-2e5lr-02alf-32bs
+run_name: &run_name unfair-tos-roberta-lg-03-drp-2e5lr-01alf-64bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -38,7 +38,7 @@ parameters:
   scheduler:
     name: linear_decay_with_warmup
     t_warmup: 0.06dur
-    alpha_f: 0.2
+    alpha_f: 0.1  # 0.2 for best
 
   optimizer:
     name: decoupled_adamw
@@ -49,11 +49,11 @@ parameters:
     eps: 1.0e-06
     weight_decay: 1.0e-5
 
-  max_duration: 15ep
+  max_duration: 20ep  # 15 best so far
   eval_interval: 500ba
   grad_clip_norm: -1.0
 
-  global_train_batch_size: 32
+  global_train_batch_size: 64  # 32 # 32 got good results
   global_eval_batch_size: 1024
 
   # System
