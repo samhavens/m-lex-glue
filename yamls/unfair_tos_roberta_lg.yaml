@@ -1,4 +1,4 @@
-run_name: &run_name unfair-tos-roberta-lg-no-drp-3e5lr-1e5wd
+run_name: &run_name unfair-tos-roberta-lg-03-drp-2e5lr-02alf-32bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -31,30 +31,30 @@ parameters:
     tokenizer_name: *tokenizer_name
     classifier_dropout: 0.3
 
-# remove... maybe it is causing the difference??
-# algorithms:
-#   fused_layernorm: {}
+  # remove... maybe it is causing the difference??
+  # algorithms:
+  #   fused_layernorm: {}
 
-scheduler:
-  name: linear_decay_with_warmup
-  t_warmup: 0.06dur
-  alpha_f: 0.2
+  scheduler:
+    name: linear_decay_with_warmup
+    t_warmup: 0.06dur
+    alpha_f: 0.2
 
-optimizer:
-  name: decoupled_adamw
-  lr: 2.0e-5
-  betas:
-    - 0.9
-    - 0.98
-  eps: 1.0e-06
-  weight_decay: 1.0e-5
+  optimizer:
+    name: decoupled_adamw
+    lr: 2.0e-5
+    betas:
+      - 0.9
+      - 0.98
+    eps: 1.0e-06
+    weight_decay: 1.0e-5
 
-max_duration: 10ep
-eval_interval: 500ba
-grad_clip_norm: -1.0
+  max_duration: 15ep
+  eval_interval: 500ba
+  grad_clip_norm: -1.0
 
-global_train_batch_size: 32 
-global_eval_batch_size: 1024
+  global_train_batch_size: 32
+  global_eval_batch_size: 1024
 
   # System
   seed: 42
