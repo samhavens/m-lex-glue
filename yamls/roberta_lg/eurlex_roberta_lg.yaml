@@ -1,4 +1,7 @@
-run_name: &run_name unfair-tos-roberta-lg-03-drp-2e5lr-01alf-64bs
+# we should expect bad results on this because the documents are so long
+# the numbers reported in the paper as "roberta" are not actually from a roberta model
+
+run_name: &run_name eurlex-roberta-lg-03-drp-2e5lr-01alf-64bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -17,7 +20,7 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task unfair_tos
+  task: eurlex
   max_seq_length: 256
   model_name: &model_name roberta-large
   tokenizer_name: &tokenizer_name roberta-large
@@ -49,11 +52,11 @@ parameters:
     eps: 1.0e-06
     weight_decay: 1.0e-5
 
-  max_duration: 20ep  # 15 best so far
+  max_duration: 20ep
   eval_interval: 500ba
   grad_clip_norm: -1.0
 
-  global_train_batch_size: 64  # 32 # 32 got good results
+  global_train_batch_size: 64  # 32 got good results as well
   global_eval_batch_size: 1024
 
   # System
@@ -73,4 +76,4 @@ parameters:
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
   # need to set up an s3 folder for myself
-  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints

@@ -1,9 +1,10 @@
-# using xl instead of xxl so I can fit whole sequences without OOM
-# hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
-run_name: &run_name lex-glue-ledgar-deberta-v3-4e-6lr-512seql
-gpu_type: a100_40gb
+# we should expect bad results on this because the documents are so long
+# the numbers reported in the paper as "roberta" are not actually from a roberta model
+
+run_name: &run_name ecthr_b-roberta-lg-03-drp-2e5lr-01alf-64bs
+gpu_type: a100_80gb
 gpu_num: 8
-platform: r7z2
+platform: r1z1
 image: mosaicml/composer:0.11.1
 integrations:
   - integration_type: "wandb"
@@ -19,10 +20,10 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task ledgar
-  max_seq_length: 512
-  model_name: &model_name microsoft/deberta-v3-large
-  tokenizer_name: &tokenizer_name microsoft/deberta-v3-large
+  task: ecthr_b
+  max_seq_length: 256
+  model_name: &model_name roberta-large
+  tokenizer_name: &tokenizer_name roberta-large
   # Run Name
   run_name: *run_name
   # Model
@@ -31,32 +32,32 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
+    classifier_dropout: 0.3
 
-  algorithms:
-    fused_layernorm: {}
+  # remove... maybe it is causing the difference??
+  # algorithms:
+  #   fused_layernorm: {}
 
-  # need to test lr schedules on lex-glue
   scheduler:
-    name: constant_with_warmup
-    t_warmup: 100ba # was 0.05dur, likely too long
+    name: linear_decay_with_warmup
+    t_warmup: 0.06dur
+    alpha_f: 0.1  # 0.2 for best
 
-  # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5  # use roberta levels
+    lr: 2.0e-5
     betas:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-5 # Amount of weight decay regularization
+    weight_decay: 1.0e-5
 
-  # again, untested
-  max_duration: 15ep
-  eval_interval: 500ba # was 1ep, took too long
+  max_duration: 20ep
+  eval_interval: 500ba
   grad_clip_norm: -1.0
-  
-  global_train_batch_size: 512  # roberta
-  global_eval_batch_size: 128
+
+  global_train_batch_size: 64  # 32 got good results as well
+  global_eval_batch_size: 1024
 
   # System
   seed: 42
@@ -75,4 +76,4 @@ parameters:
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
   # need to set up an s3 folder for myself
-  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints

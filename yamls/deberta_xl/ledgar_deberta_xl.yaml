@@ -1,7 +1,9 @@
-run_name: &run_name lex-glue-ledgar-gpt2xl-0-2drp-128bs
-gpu_type: a100_80gb
+# using xl instead of xxl so I can fit whole sequences without OOM
+# hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
+run_name: &run_name lex-glue-ledgar-deberta-v2-xl-4e-6lr-512seql
+gpu_type: a100_40gb
 gpu_num: 8
-platform: r1z1
+platform: r7z2
 image: mosaicml/composer:0.11.1
 integrations:
   - integration_type: "wandb"
@@ -17,10 +19,10 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task ledgar
-  max_seq_length: 384
-  model_name: &model_name gpt2-xl
-  tokenizer_name: &tokenizer_name gpt2-xl
+  task: ledgar
+  max_seq_length: 512
+  model_name: &model_name microsoft/deberta-v2-xlarge-mnli
+  tokenizer_name: &tokenizer_name microsoft/deberta-v2-xlarge-mnli
   # Run Name
   run_name: *run_name
   # Model
@@ -29,18 +31,16 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
-    hidden_dropout_prob: 0.2
-    attention_probs_dropout_prob: 0.2
 
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 500ba # was 0.05dur, likely too long
+    t_warmup: 50ba # was 0.05dur, likely too long
 
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5  # 4x bs, so... almost 4x lr
+    lr: 4.0e-6
     betas:
       - 0.9
       - 0.98
@@ -48,12 +48,12 @@ parameters:
     weight_decay: 1.0e-5 # Amount of weight decay regularization
 
   # again, untested
-  max_duration: 15ep
+  max_duration: 8ep
   eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 256  # big for regularizing, memorized too fast
-  global_eval_batch_size: 16
+  global_train_batch_size: 48
+  global_eval_batch_size: 8
 
   # System
   seed: 42
@@ -71,4 +71,5 @@ parameters:
   # Checkpoint to local filesystem or remote object store
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
-  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+  # need to set up an s3 folder for myself
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints

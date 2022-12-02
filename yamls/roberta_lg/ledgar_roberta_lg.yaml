@@ -1,9 +1,9 @@
-# using xl instead of xxl so I can fit whole sequences without OOM
-# hyperparams inspired by https://github.com/microsoft/DeBERTa/blob/master/experiments/glue/mrpc.sh
-run_name: &run_name lex-glue-ledgar-deberta-v2-xl-4e-6lr-512seql
-gpu_type: a100_40gb
+# turning up the weight decay and going for longer
+# adding fused layernorm
+run_name: &run_name lex-glue-ledgar-roberta-lg-3e-5lr-512seql-1e-4wd-60ep
+gpu_type: a100_80gb  #NOTE
 gpu_num: 8
-platform: r7z2
+platform: r1z1 #NOTE
 image: mosaicml/composer:0.11.1
 integrations:
   - integration_type: "wandb"
@@ -19,10 +19,10 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task ledgar
+  task: ledgar
   max_seq_length: 512
-  model_name: &model_name microsoft/deberta-v2-xlarge-mnli
-  tokenizer_name: &tokenizer_name microsoft/deberta-v2-xlarge-mnli
+  model_name: &model_name roberta-large
+  tokenizer_name: &tokenizer_name roberta-large
   # Run Name
   run_name: *run_name
   # Model
@@ -32,28 +32,30 @@ parameters:
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
 
+  algorithms:
+    fused_layernorm: {}
+
   # need to test lr schedules on lex-glue
   scheduler:
     name: constant_with_warmup
-    t_warmup: 50ba # was 0.05dur, likely too long
+    t_warmup: 100ba  # guess
 
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 4.0e-6
+    lr: 3.0e-5  # inspired by roberta GLUE
     betas:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-5 # Amount of weight decay regularization
+    weight_decay: 1.0e-4 # Amount of weight decay regularization, 10x since last trial
 
-  # again, untested
-  max_duration: 8ep
-  eval_interval: 500ba # was 1ep, took too long
+  max_duration: 60ep  # need to go for a long time with large weight decay
+  eval_interval: 500ba
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 48
-  global_eval_batch_size: 8
+  global_train_batch_size: 512  # inspired by roberta GLUE then doubled for 80gb
+  global_eval_batch_size: 1024
 
   # System
   seed: 42
@@ -72,4 +74,4 @@ parameters:
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
   # need to set up an s3 folder for myself
-  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints

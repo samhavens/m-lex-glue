@@ -1,0 +1,75 @@
+run_name: &run_name lex-glue-scotus-roberta-512seq-3e5lr-1e6wd-256bs
+gpu_type: a100_80gb  #NOTE
+gpu_num: 8
+platform: r1z1 #NOTE
+image: mosaicml/composer:0.11.1
+integrations:
+  - integration_type: "wandb"
+    project: &wandb_project lex-glue
+    entity: mosaic-ml
+  - integration_type: "git_repo"  # maybe should be replaced with the mcli way of packaging up this repo and shipping it to the cloud
+    git_repo: samhavens/m-lex-glue
+    git_branch: main
+command: >-
+  set -e -x;
+  cd m-lex-glue;
+  pip install -r requirements.txt;
+  composer task.py /mnt/config/parameters.yaml
+optimization_level: 0
+parameters:
+  task: scotus
+  max_seq_length: 512
+  model_name: &model_name roberta-large
+  tokenizer_name: &tokenizer_name roberta-large
+  # Run Name
+  run_name: *run_name
+  # Model
+  model:
+    name: *model_name
+    use_pretrained: true
+    pretrained_model_name: *model_name
+    tokenizer_name: *tokenizer_name
+
+  algorithms:
+    fused_layernorm: {}
+
+  # need to test lr schedules on lex-glue
+  scheduler:
+    name: constant_with_warmup
+    t_warmup: 100ba  # guess
+
+  # haven't checked these values
+  optimizer:
+    name: decoupled_adamw
+    lr: 3.0e-5  # inspired by roberta GLUE
+    betas:
+      - 0.9
+      - 0.98
+    eps: 1.0e-06
+    weight_decay: 1.0e-6
+
+  max_duration: 20ep  # need to go for a long time with large weight decay
+  eval_interval: 500ba
+  grad_clip_norm: -1.0
+  
+  global_train_batch_size: 256
+  global_eval_batch_size: 256
+
+  # System
+  seed: 42
+  grad_accum: auto
+  precision: amp
+  # Logging
+  progress_bar: true
+  log_to_console: true
+  callbacks:
+    speed_monitor:
+      window_size: 500
+    lr_monitor: {}
+  loggers:
+    wandb: {}
+  # Checkpoint to local filesystem or remote object store
+  save_interval: 1ep
+  save_num_checkpoints_to_keep: 1
+  # need to set up an s3 folder for myself
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints

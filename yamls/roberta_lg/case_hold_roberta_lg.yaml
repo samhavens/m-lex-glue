@@ -1,6 +1,5 @@
-# turning up the weight decay and going for longer
-# adding fused layernorm
-run_name: &run_name lex-glue-ledgar-roberta-lg-3e-5lr-512seql-1e-4wd-60ep
+# pretty much all values are guesses
+run_name: &run_name case_hold-roberta-lg-fixed-1
 gpu_type: a100_80gb  #NOTE
 gpu_num: 8
 platform: r1z1 #NOTE
@@ -19,8 +18,8 @@ command: >-
   composer task.py /mnt/config/parameters.yaml
 optimization_level: 0
 parameters:
-  task: &task ledgar
-  max_seq_length: 512
+  task: case_hold
+  max_seq_length: 256
   model_name: &model_name roberta-large
   tokenizer_name: &tokenizer_name roberta-large
   # Run Name
@@ -43,18 +42,18 @@ parameters:
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 3.0e-5  # inspired by roberta GLUE
+    lr: 3.0e-5
     betas:
       - 0.9
       - 0.98
     eps: 1.0e-06
-    weight_decay: 1.0e-4 # Amount of weight decay regularization, 10x since last trial
+    weight_decay: 1.0e-5
 
-  max_duration: 60ep  # need to go for a long time with large weight decay
+  max_duration: 30ep
   eval_interval: 500ba
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 512  # inspired by roberta GLUE then doubled for 80gb
+  global_train_batch_size: 512 
   global_eval_batch_size: 1024
 
   # System
@@ -74,4 +73,4 @@ parameters:
   save_interval: 1ep
   save_num_checkpoints_to_keep: 1
   # need to set up an s3 folder for myself
-  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${model_name}/${run_name}/checkpoints
