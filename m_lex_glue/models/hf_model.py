@@ -1,15 +1,16 @@
 from omegaconf import DictConfig
-from torch import Tensor
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification.f_beta import F1Score
-from transformers import AutoConfig, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from composer.loss import binary_cross_entropy_with_logits
 from composer.models import HuggingFaceModel
 from composer.metrics import CrossEntropy, LossMetric
+from composer.metrics.nlp import LanguageCrossEntropy
 
-from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, task_example_types
+from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, summarization, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
+from m_lex_glue.metrics.modified_metrics import FloatAccuracy, FloatF1, RougeWithDetokenizer
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice, GPTJForMultipleChoice
 from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 
@@ -17,26 +18,13 @@ from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
     """Attach the tokenizer to the model so it is easily available to pass to the dataloader builder"""
     def __init__(self, *args, **kwargs):
-        self.tokenizer = kwargs['tokenizer']
         super().__init__(*args, **kwargs)
+        self.tokenizer = kwargs['tokenizer']
+        self.train_metrics = kwargs['train_metrics']
+        self.eval_metrics = kwargs['eval_metrics'] if kwargs['eval_metrics'] is not None else kwargs['train_metrics']
 
-
-class FloatAccuracy(Accuracy):
-    """For multi-label classification, torchmetrics requires that the target tensor be a torch.int
-    however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
-    So this class converts the target to an int tensor before computing metrics"""
-    def update(self, preds: Tensor, target: Tensor) -> None:
-        target = target.int()
-        return super().update(preds, target)
-
-
-class FloatF1(F1Score):
-    """For multi-label classification, torchmetrics requires that the target tensor be a torch.int
-    however, the binary_cross_entropy_with_logits function requires that the target tensor be a torch.float
-    So this class converts the target to an int tensor before computing metrics"""
-    def update(self, preds: Tensor, target: Tensor) -> None:
-        target = target.int()
-        return super().update(preds, target)
+    def get_metrics(self, is_train=False):
+        return self.train_metrics if is_train else self.eval_metrics
 
 
 def get_huggingface_model(cfg: DictConfig):
@@ -54,28 +42,32 @@ def get_huggingface_model(cfg: DictConfig):
         use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
         use_fast=False if "deberta" in cfg.model_name else True  # crazy byte conversion error
     )
-    # todo also allow seq2seq
-    if task_example_types[cfg.task] == multi_class:
+
+    task = task_example_types[cfg.task]
+    eval_metrics = None
+
+    # @TODO also allow seq2seq
+    if task == multi_class:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
             finetuning_task=cfg.task,
         )
-        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
+        train_metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
             config=hf_config,
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
-    elif task_example_types[cfg.task] == multi_label:
+    elif task == multi_label:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
             problem_type="multi_label_classification",
             finetuning_task=cfg.task,
         )
-        metrics = [
+        train_metrics = [
             LossMetric(binary_cross_entropy_with_logits),
             FloatAccuracy(task="multilabel"),
             FloatF1(num_classes=hf_config.num_labels, average="macro", task="multilabel")
@@ -86,13 +78,13 @@ def get_huggingface_model(cfg: DictConfig):
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
-    elif task_example_types[cfg.task] == multiple_choice_qa:
+    elif task == multiple_choice_qa:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             finetuning_task=cfg.task,
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
         )
-        metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
+        train_metrics = [CrossEntropy(), Accuracy(), F1Score(num_classes=hf_config.num_labels, average="macro")]
         if 'gpt2' in cfg.model_name:
             model = GPT2ForMultipleChoice.from_pretrained(
                 cfg.model_name,
@@ -111,6 +103,25 @@ def get_huggingface_model(cfg: DictConfig):
                 config=hf_config,
                 use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             )
+    elif task == summarization:
+        hf_config  = AutoConfig.from_pretrained(
+            cfg.model_name,
+            finetuning_task=cfg.task,
+        )
+        train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
+        eval_metrics = [LanguageCrossEntropy(hf_config.vocab_size), RougeWithDetokenizer(detokenizer=tokenizer)]
+        if 'gpt' in cfg.model_name:
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.model_name,
+                config=hf_config,
+                use_auth_token=cfg.get('use_auth_token', None),
+            )
+        else:
+            model = AutoModelForSeq2SeqLM.from_pretrained(
+                cfg.model_name,
+                config=hf_config,
+                use_auth_token=cfg.get('use_auth_token', None),
+            )
     else:
         raise ValueError(f"Your YAML file has the task set to {cfg.task}, which is invalid."
                          f"Please use a task in {list(task_example_types.keys())}")
@@ -125,5 +136,11 @@ def get_huggingface_model(cfg: DictConfig):
     if is_fsdp_able(model):
         prepare_hf_model_for_fsdp(model)
 
-    return ComposerHFModelWithTokenizer(model=model, tokenizer=tokenizer, metrics=metrics, use_logits=True)
+    return ComposerHFModelWithTokenizer(
+        model=model,
+        tokenizer=tokenizer,
+        train_metrics=train_metrics,
+        eval_metrics=eval_metrics,
+        use_logits=True
+    )
     

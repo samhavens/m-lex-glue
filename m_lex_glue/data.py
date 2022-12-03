@@ -13,9 +13,11 @@ from m_lex_glue.labels import TASK_NAME_TO_LABELS
 multi_class = (None, "text", "label")  # none, str, int
 multi_label = (None, "text", "labels")  # none, str, List[int]
 multiple_choice_qa = ("context", "endings", "label")  # str, str, int
+summarization = ("text", "summary")
 
 
 task_example_types = {
+    'billsum': summarization,
     'case_hold': multiple_choice_qa,
     'ecthr_a': multi_label,
     'ecthr_b': multi_label,
@@ -28,7 +30,45 @@ task_example_types = {
 log = logging.getLogger(__name__)
 
 
+def get_summarization_preprocessor(tokenizer, max_seq_length):
+    text_column = summarization[0]
+    summary_column = summarization[1]
+
+    prefix = ""
+    if any(clue in tokenizer.name_or_path for clue in ["t5", "ul2", "t0"]):
+        prefix = "summarize: "
+
+    def preprocess_function(examples):
+        # remove pairs where at least one record is None
+        inputs, targets = [], []
+        for i in range(len(examples[text_column])):
+            if examples[text_column][i] and examples[summary_column][i]:
+                inputs.append(examples[text_column][i])
+                targets.append(examples[summary_column][i])
+
+        inputs = [prefix + inp for inp in inputs]
+        model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
+
+        # Tokenize targets with the `text_target` keyword argument
+        labels = tokenizer(text_target=targets, max_length=max_seq_length, padding="max_length", truncation=True)
+
+        # replace all tokenizer.pad_token_id in the labels by -100 to ignore
+        # padding in the loss
+        labels["input_ids"] = [
+            [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+        ]
+
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    return preprocess_function
+
+
+
 def get_preprocessor(task, example_type, tokenizer, max_seq_length):
+
+    if task == summarization:
+        return get_summarization_preprocessor(tokenizer, max_seq_length)
 
     def tokenize_function(inp):
         if example_type == multiple_choice_qa:
@@ -76,6 +116,7 @@ def create_lexglue_dataset(
     max_retries: int = 10,
     num_workers: int = 0,
 ):
+    """This actually is an extended version of lexglue containing billsum"""
 
     if task not in task_example_types:
         raise ValueError(f'task ({task}) must be one of {task_example_types.keys()}')
@@ -106,7 +147,12 @@ def create_lexglue_dataset(
     log.info(f'Starting tokenization by preprocessing over {num_workers} threads!')
     example_type = task_example_types[task]
 
-    columns_to_remove = ['text'] if example_type != multiple_choice_qa else ["context", "endings"]
+    if example_type == multiple_choice_qa:
+        columns_to_remove = [multiple_choice_qa[0], multiple_choice_qa[1]]
+    elif example_type == summarization:
+        columns_to_remove = [summarization[0], summarization[1]]
+    else:
+        columns_to_remove = ['text']
 
     assert isinstance(dataset, datasets.Dataset)
 
@@ -115,7 +161,7 @@ def create_lexglue_dataset(
     if example_type == multi_label:
         # the dataset which we download has stored information 
         dataset = dataset.rename_column("labels", "targets")  # it forces `label` column to be CLassList
-        columns_to_remove.append("targets")
+        columns_to_remove.append("targets") # we create this then remove it so label is free to be a Float
 
     dataset = dataset.map(
         pre_process_fn,
