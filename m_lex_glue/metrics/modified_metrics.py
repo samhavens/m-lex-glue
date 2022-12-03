@@ -39,7 +39,7 @@ class RougeWithDetokenizer(ROUGEScore):
         normalizer: Optional[Callable[[str], str]] = None,
         tokenizer: Optional[Callable[[str], Sequence[str]]] = None,
         accumulate: Literal["avg", "best"] = "best",
-        rouge_keys: Union[str, Tuple[str, ...]] = ...,
+        rouge_keys: Union[str, Tuple[str, ...]] = ('rouge1', 'rouge2', 'rougeL', 'rougeLsum'),
         **kwargs: Any
     ):
         self.detokenizer = detokenizer
