@@ -1,4 +1,4 @@
-run_name: &run_name lex-glue-ledgar-gpt2xl-0-2drp-128bs
+run_name: &run_name billsum-t03b-1024sl-32bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -7,7 +7,7 @@ integrations:
   - integration_type: "wandb"
     project: &wandb_project lex-glue
     entity: mosaic-ml
-  - integration_type: "git_repo"  # maybe should be replaced with the mcli way of packaging up this repo and shipping it to the cloud
+  - integration_type: "git_repo"  # use local integration!
     git_repo: samhavens/m-lex-glue
     git_branch: main
 command: >-

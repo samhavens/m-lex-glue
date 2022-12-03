@@ -227,6 +227,7 @@ UNFAIR_CATEGORIES = [
 CASEHOLD_LABELS = ["0", "1", "2", "3", "4"]
 
 TASK_NAME_TO_LABELS = {
+    'billsum': ["This is not a labeling task"],
     'case_hold': CASEHOLD_LABELS,
     'ecthr_a': ECTHR_ARTICLES,
     'ecthr_b': ECTHR_ARTICLES,
