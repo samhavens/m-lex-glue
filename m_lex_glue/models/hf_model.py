@@ -109,7 +109,10 @@ def get_huggingface_model(cfg: DictConfig):
             finetuning_task=cfg.task,
         )
         train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
-        eval_metrics = [LanguageCrossEntropy(hf_config.vocab_size), RougeWithDetokenizer(detokenizer=tokenizer)]
+        eval_metrics = [
+            LanguageCrossEntropy(hf_config.vocab_size),
+            RougeWithDetokenizer(detokenizer=tokenizer, rouge_keys=('rouge1', 'rouge2', 'rougeL')),
+        ]
         if 'gpt' in cfg.model_name:
             model = AutoModelForCausalLM.from_pretrained(
                 cfg.model_name,
