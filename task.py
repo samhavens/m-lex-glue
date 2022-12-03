@@ -170,6 +170,7 @@ def main(task_name: str, cfg: DictConfig) -> None:
         device=cfg.get('device', None),
         grad_clip_norm=cfg.grad_clip_norm,
         grad_accum=cfg.get('grad_accum', 'auto'),
+        fsdp_config=fsdp_config,  # type: ignore
         save_folder=cfg.get('save_folder', None),
         save_interval=cfg.get('save_interval', '1000ba'),
         save_num_checkpoints_to_keep=cfg.get('save_num_checkpoints_to_keep', -1),
