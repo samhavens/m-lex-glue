@@ -57,6 +57,11 @@ parameters:
   global_train_batch_size: 256  # big for regularizing, memorized too fast
   global_eval_batch_size: 16
 
+  fsdp_config:
+    sharding_strategy: FULL_SHARD
+    min_params: 1.0e9
+    verbose: True
+
   # System
   seed: 42
   grad_accum: auto

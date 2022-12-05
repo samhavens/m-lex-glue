@@ -28,13 +28,14 @@ from m_lex_glue.models.hf_model import get_huggingface_model
 
 
 def build_dataloader(dataset, device_batch_size, **kwargs):
+    # probably should make drop_last a config
     import transformers
     dataset = cast(Dataset, dataset)
 
     return DataLoader(
         dataset=dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(dataset, drop_last=True, shuffle=False),  # added drop_last=True for billsum
+        sampler=dist.get_sampler(dataset, drop_last=True, shuffle=False),  # added drop_last=True for billsum error
         collate_fn=transformers.default_data_collator,
         **kwargs,
     )

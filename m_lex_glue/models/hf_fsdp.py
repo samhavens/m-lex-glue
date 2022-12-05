@@ -46,10 +46,10 @@ def prepare_hf_model_for_fsdp(model):
     # This tying occurs inside the `self.post_init()` function.
     # This is a hurdle for FSDP because they need to be in the same FSDP block
     # These lines ensures that both modules stay together in the top-most block
-    if isinstance(model, _WEIGHT_TIED_HF_MODELS):
-        model.transformer._fsdp_wrap = False
-        model.transformer.wte._fsdp_wrap = False
-        model.lm_head._fsdp_wrap = False
+    # if isinstance(model, _WEIGHT_TIED_HF_MODELS):  # test just always doing this..?
+    model.transformer._fsdp_wrap = False
+    model.transformer.wte._fsdp_wrap = False
+    model.lm_head._fsdp_wrap = False
 
     # FSDP Wrap and Activation Checkpoint every GPT2Block
     model.fsdp_wrap_fn = lambda module: isinstance(module, _HF_MODEL_BLOCKS)
