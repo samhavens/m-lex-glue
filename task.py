@@ -34,7 +34,7 @@ def build_dataloader(dataset, device_batch_size, **kwargs):
     return DataLoader(
         dataset=dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(dataset, drop_last=False, shuffle=False),
+        sampler=dist.get_sampler(dataset, drop_last=True, shuffle=False),  # added drop_last=True for billsum
         collate_fn=transformers.default_data_collator,
         **kwargs,
     )
