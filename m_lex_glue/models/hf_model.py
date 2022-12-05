@@ -1,4 +1,5 @@
 from omegaconf import DictConfig
+from torchmetrics import Metric
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification.f_beta import F1Score
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
@@ -8,7 +9,7 @@ from composer.models import HuggingFaceModel
 from composer.metrics import CrossEntropy, LossMetric
 from composer.metrics.nlp import LanguageCrossEntropy
 
-from m_lex_glue.data import multi_class, multi_label, multiple_choice_qa, summarization, task_example_types
+from m_lex_glue.data.data import multi_class, multi_label, multiple_choice_qa, summarization, task_example_types
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.metrics.modified_metrics import FloatAccuracy, FloatF1, RougeWithDetokenizer
 from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice, GPTJForMultipleChoice
@@ -17,11 +18,14 @@ from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
     """Attach the tokenizer to the model so it is easily available to pass to the dataloader builder"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, train_metrics=None, eval_metrics=None, **kwargs):
         self.tokenizer = kwargs['tokenizer']
-        self.train_metrics = kwargs['train_metrics']
-        self.eval_metrics = kwargs['eval_metrics'] if kwargs['eval_metrics'] is not None else kwargs['train_metrics']
+        super().__init__(*args, **kwargs)
+        self.train_metrics = {metric.__class__.__name__: metric for metric in train_metrics}  # type: ignore
+        if eval_metrics:
+            self.eval_metrics = {metric.__class__.__name__: metric for metric in eval_metrics}
+        else:
+            self.eval_metrics = self.train_metrics
 
     def get_metrics(self, is_train=False):
         return self.train_metrics if is_train else self.eval_metrics
@@ -108,18 +112,25 @@ def get_huggingface_model(cfg: DictConfig):
             cfg.model_name,
             finetuning_task=cfg.task,
         )
-        train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
-        eval_metrics = [
-            LanguageCrossEntropy(hf_config.vocab_size),
-            RougeWithDetokenizer(detokenizer=tokenizer, rouge_keys=('rouge1', 'rouge2', 'rougeL')),
-        ]
         if 'gpt' in cfg.model_name:
+            train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
+            eval_metrics = [
+                LanguageCrossEntropy(hf_config.vocab_size),
+                RougeWithDetokenizer(detokenizer=tokenizer),
+            ]
             model = AutoModelForCausalLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
                 use_auth_token=cfg.get('use_auth_token', None),
             )
         else:
+            # Need to figure out T5 models...
+            raise NotImplementedError("T5 models not yet supported!")
+            train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
+            eval_metrics = [
+                LanguageCrossEntropy(hf_config.vocab_size),
+                RougeWithDetokenizer(detokenizer=tokenizer),
+            ]
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,

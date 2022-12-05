@@ -22,7 +22,7 @@ from composer.callbacks import LRMonitor, MemoryMonitor, SpeedMonitor
 from composer.loggers import WandBLogger
 import wandb
 
-from m_lex_glue.data import create_lexglue_dataset
+from m_lex_glue.data.data import create_lexglue_dataset
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.hf_model import get_huggingface_model
 

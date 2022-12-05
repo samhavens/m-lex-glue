@@ -49,8 +49,12 @@ class RougeWithDetokenizer(ROUGEScore):
         # -100 is special value which means "don't use when computing loss"
         # used for ignoring pad tokens for loss
         target = torch.where(target != -100, target, self.detokenizer.pad_token_id)
+        # predictions is a batch x num_classes tensor, take the argmax to get class indicies
+        preds = torch.argmax(preds, dim=-1)
+        assert preds.shape == target.shape
+        
         preds_decoded: Sequence[str] = self.detokenizer.batch_decode(
-            preds,
+            preds[0],
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )

@@ -6,14 +6,14 @@ import torch
 from composer.utils import dist
 from transformers.tokenization_utils_fast import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from m_lex_glue.casehold_helpers import MultipleChoiceDataset, format_casehold_batched, format_casehold_input
+from m_lex_glue.data.casehold_helpers import MultipleChoiceDataset, format_casehold_batched, format_casehold_input
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 
 
 multi_class = (None, "text", "label")  # none, str, int
 multi_label = (None, "text", "labels")  # none, str, List[int]
 multiple_choice_qa = ("context", "endings", "label")  # str, str, int
-summarization = ("text", "summary")
+summarization = ("title", "text", "summary")
 
 
 task_example_types = {
@@ -31,11 +31,13 @@ log = logging.getLogger(__name__)
 
 
 def get_summarization_preprocessor(tokenizer, max_seq_length):
-    text_column = summarization[0]
-    summary_column = summarization[1]
+    text_column = summarization[1]
+    summary_column = summarization[2]
 
-    prefix = ""
     if any(clue in tokenizer.name_or_path for clue in ["t5", "ul2", "t0"]):
+        prefix = "summarize: "
+    else:
+        # is there any reason NOT to do a task-specific prefix??
         prefix = "summarize: "
 
     def preprocess_function(examples):
@@ -49,8 +51,7 @@ def get_summarization_preprocessor(tokenizer, max_seq_length):
         inputs = [prefix + inp for inp in inputs]
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
-        # Tokenize targets with the `text_target` keyword argument
-        labels = tokenizer(text_target=targets, max_length=max_seq_length, padding="max_length", truncation=True)
+        labels = tokenizer(targets, max_length=max_seq_length, padding="max_length", truncation=True)
 
         # replace all tokenizer.pad_token_id in the labels by -100 to ignore
         # padding in the loss
@@ -67,7 +68,7 @@ def get_summarization_preprocessor(tokenizer, max_seq_length):
 
 def get_preprocessor(task, example_type, tokenizer, max_seq_length):
 
-    if task == summarization:
+    if example_type == summarization:
         return get_summarization_preprocessor(tokenizer, max_seq_length)
 
     def tokenize_function(inp):
@@ -127,41 +128,48 @@ def create_lexglue_dataset(
     log.info(f'Loading {task.upper()} on rank {dist.get_global_rank()}')
     download_config = datasets.DownloadConfig(max_retries=max_retries)
 
+    example_type = task_example_types[task]
+
     if task == "case_hold":
         # For now we treat this like sequence classification, using
         # AutoModelForMultipleChoice models
+        columns_to_remove = [multiple_choice_qa[0], multiple_choice_qa[1]]
         return MultipleChoiceDataset(
             tokenizer=tokenizer,
             task=task,
             max_seq_length=max_seq_length,
             split=split,
         )
-
-    dataset = datasets.load_dataset(
-        'lex_glue',
-        task,
-        split=split,
-        download_config=download_config,
-    )
+    elif task == "billsum":
+        # billsum is not really part of lex-GLUE, but should be
+        dataset = datasets.load_dataset(
+            task,
+            split=split if split == "train" else "test",  # eval split has different name; normalize
+            download_config=download_config,
+        )
+        columns_to_remove = list(summarization)
+    else:
+        dataset = datasets.load_dataset(
+            'lex_glue',
+            task,
+            split=split,
+            download_config=download_config,
+        )
+        columns_to_remove = ['text']
 
     log.info(f'Starting tokenization by preprocessing over {num_workers} threads!')
-    example_type = task_example_types[task]
-
-    if example_type == multiple_choice_qa:
-        columns_to_remove = [multiple_choice_qa[0], multiple_choice_qa[1]]
-    elif example_type == summarization:
-        columns_to_remove = [summarization[0], summarization[1]]
-    else:
-        columns_to_remove = ['text']
+    
 
     assert isinstance(dataset, datasets.Dataset)
 
     pre_process_fn = get_preprocessor(task, example_type, tokenizer, max_seq_length)
 
     if example_type == multi_label:
-        # the dataset which we download has stored information 
-        dataset = dataset.rename_column("labels", "targets")  # it forces `label` column to be CLassList
-        columns_to_remove.append("targets") # we create this then remove it so label is free to be a Float
+        # the dataset which we download is typed in such a way that we cannot coerce the labels column into a Float
+        # so here we rename the labels column to targets, so we can name it back to labels as a Float type
+        # which both torch and torchmetrics expect
+        dataset = dataset.rename_column("labels", "targets")
+        columns_to_remove.append("targets")  # type: ignore
 
     dataset = dataset.map(
         pre_process_fn,
