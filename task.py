@@ -168,7 +168,6 @@ def main(task_name: str, cfg: DictConfig) -> None:
         loggers=loggers,
         callbacks=callbacks,
         precision=cfg.precision,
-        device=cfg.get('device', None),
         grad_clip_norm=cfg.grad_clip_norm,
         grad_accum=cfg.get('grad_accum', 'auto'),
         fsdp_config=fsdp_config,  # type: ignore
