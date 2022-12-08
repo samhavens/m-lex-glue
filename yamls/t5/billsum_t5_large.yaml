@@ -1,4 +1,4 @@
-run_name: &run_name billsum-gpt2xl-1024sl-32bs-contrastive
+run_name: &run_name billsum-5-large-1024sl-32bs
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
@@ -10,8 +10,6 @@ integrations:
   - integration_type: "git_repo"  # use local integration!
     git_repo: samhavens/m-lex-glue
     git_branch: main
-# in the following command we download NLTK data to /usr/share/nltk_data which is the default location on Unix
-# Rouge score calculation fails without it, so it is necessary for summarization evaluation 
 command: >-
   set -e -x;
   cd m-lex-glue;
@@ -22,8 +20,8 @@ optimization_level: 0
 parameters:
   task: &task billsum
   max_seq_length: 1024
-  model_name: &model_name gpt2-xl
-  tokenizer_name: &tokenizer_name gpt2-xl
+  model_name: &model_name t5-large
+  tokenizer_name: &tokenizer_name t5-large
   # Run Name
   run_name: *run_name
   # Model
@@ -41,7 +39,7 @@ parameters:
   # haven't checked these values
   optimizer:
     name: decoupled_adamw
-    lr: 6.0e-5
+    lr: 1.0e-4  # 4x bs, so... almost 4x lr
     betas:
       - 0.9
       - 0.98
@@ -49,12 +47,12 @@ parameters:
     weight_decay: 1.0e-5 # Amount of weight decay regularization
 
   # again, untested
-  max_duration: 10ep
-  eval_interval: 1ep
+  max_duration: 15ep
+  eval_interval: 500ba # was 1ep, took too long
   grad_clip_norm: -1.0
   
-  global_train_batch_size: 64
-  global_eval_batch_size: 64
+  global_train_batch_size: 64  # big for regularizing, memorized too fast
+  global_eval_batch_size: 32
 
   # System
   seed: 42
