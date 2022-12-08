@@ -27,14 +27,14 @@ from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.hf_model import get_huggingface_model
 
 
-def build_dataloader(dataset, device_batch_size, drop_last=False, **kwargs):
+def build_dataloader(dataset, device_batch_size, drop_last=False, shuffle=False, **kwargs):
     """default dataloader, some datasets require more complicated logic"""
     dataset = cast(Dataset, dataset)
 
     return DataLoader(
         dataset=dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(dataset, drop_last=drop_last, shuffle=False),
+        sampler=dist.get_sampler(dataset, drop_last=drop_last, shuffle=shuffle),
         collate_fn=transformers.default_data_collator,
         **kwargs,
     )
@@ -128,6 +128,7 @@ def main(cfg: DictConfig) -> None:
 
     # Dataloaders
     drop_last = cfg.get("drop_last", False)
+
     print("Building eval loader...")
     if task == "billsum":
         eval_clm_dataset = create_clm_dataset(task, model.tokenizer, split="test", max_seq_length=cfg.max_seq_length)
@@ -141,7 +142,7 @@ def main(cfg: DictConfig) -> None:
         print("Building train loader...")
         train_dataset = create_lexglue_dataset(task, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
 
-    train_loader = build_dataloader(train_dataset, device_train_batch_size, drop_last=drop_last)
+    train_loader = build_dataloader(train_dataset, device_train_batch_size, drop_last=drop_last, shuffle=True)
 
     # Optimizer
     optimizer = build_optimizer(cfg.optimizer, model)

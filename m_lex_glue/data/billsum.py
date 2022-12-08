@@ -209,7 +209,11 @@ def build_summarization_dataloaders(
     drop_last=False,
     **kwargs
 ) -> List[Evaluator]:
-    """do some tricks to get around composer not having an easy way to know when to generate or do one forward pass"""
+    """Build the evaluation sets for summarization.
+
+    Composer does not having an easy way to know when to generate or do one forward pass,
+    so we attach information to the batch about what dataset it is so the model can use that to
+    decide how to run the eval forward pass"""
     clm_dataset = cast(Dataset, clm_dataset)
     summarization_dataset = cast(Dataset, summarization_dataset)
 
