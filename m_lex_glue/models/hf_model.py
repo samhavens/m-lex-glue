@@ -229,8 +229,8 @@ def get_huggingface_model(cfg: DictConfig):
             use_logits=True,
             min_length=cfg.get("summary_min_length", 100),
             max_length=cfg.get("summary_max_length", 512),
-            num_beams=cfg.get("num_beams", 1),
-            do_sample=cfg.get("sample_decoder", False),
+            num_beams=cfg.get("summary_num_beams", 1),
+            do_sample=cfg.get("summary_do_sample", False),
         )
     else:
         return ComposerHFModelWithTokenizer(
