@@ -8,9 +8,8 @@ import sys
 from typing import cast
 from omegaconf import OmegaConf as om, DictConfig
 
-from torch.utils.data import DataLoader
-from transformers import AutoConfig
-
+import transformers
+import wandb
 from composer import Trainer, algorithms
 from composer.core.types import Dataset
 from composer.optim import DecoupledAdamW
@@ -20,22 +19,22 @@ from composer.optim.scheduler import (ConstantWithWarmupScheduler,
 from composer.utils import dist, reproducibility
 from composer.callbacks import LRMonitor, MemoryMonitor, SpeedMonitor
 from composer.loggers import WandBLogger
-import wandb
+from torch.utils.data import DataLoader
 
-from m_lex_glue.data.data import create_lexglue_dataset
+from m_lex_glue.data.datasets import create_lexglue_dataset
+from m_lex_glue.data.billsum import create_clm_dataset, create_summarization_dataset, build_summarization_dataloaders
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.hf_model import get_huggingface_model
 
 
-def build_dataloader(dataset, device_batch_size, **kwargs):
-    # probably should make drop_last a config
-    import transformers
+def build_dataloader(dataset, device_batch_size, drop_last=False, **kwargs):
+    """default dataloader, some datasets require more complicated logic"""
     dataset = cast(Dataset, dataset)
 
     return DataLoader(
         dataset=dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(dataset, drop_last=True, shuffle=False),  # added drop_last=True for billsum error
+        sampler=dist.get_sampler(dataset, drop_last=drop_last, shuffle=False),
         collate_fn=transformers.default_data_collator,
         **kwargs,
     )
@@ -95,12 +94,18 @@ def build_scheduler(cfg):
         raise ValueError(f'Not sure how to build scheduler: {cfg.name}')
 
 
-def build_model(cfg: DictConfig, task_name: str):
-    print(f"Number of labels: {len(TASK_NAME_TO_LABELS[task_name])}")
-    return get_huggingface_model(cfg)
+def build_model(cfg: DictConfig, task: str):
+    print(f"task: {task}")
+    print(f"Number of labels: {len(TASK_NAME_TO_LABELS[task])}")
+    model = get_huggingface_model(cfg)
+    print("Model Name:", model.__class__.__name__)
+    print("Metrics:", model.metrics())
+    print("Vocabulary Size:", len(model.tokenizer))
+    return model
 
 
-def main(task_name: str, cfg: DictConfig) -> None:
+def main(cfg: DictConfig) -> None:
+    task = cfg.task
     print("Training using config: ")
     print(om.to_yaml(cfg, resolve=True))
     reproducibility.seed_all(cfg.seed)
@@ -113,7 +118,7 @@ def main(task_name: str, cfg: DictConfig) -> None:
 
     # Build Model
     print('Initializing model...')
-    model = build_model(cfg, task_name)
+    model = build_model(cfg, task)
     n_params = sum(p.numel() for p in model.parameters())
     print(f'{n_params=:.4e}')
 
@@ -122,12 +127,21 @@ def main(task_name: str, cfg: DictConfig) -> None:
     device_eval_batch_size = cfg.get('global_eval_batch_size', cfg.global_train_batch_size) // dist.get_world_size()
 
     # Dataloaders
+    drop_last = cfg.get("drop_last", False)
     print("Building eval loader...")
-    eval_dataset = create_lexglue_dataset(task_name, model.tokenizer, split="validation", max_seq_length=cfg.max_seq_length)
-    eval_loader = build_dataloader(eval_dataset, device_eval_batch_size)
-    print("Building train loader...")
-    train_dataset = create_lexglue_dataset(task_name, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
-    train_loader = build_dataloader(train_dataset, device_train_batch_size)
+    if task == "billsum":
+        eval_clm_dataset = create_clm_dataset(task, model.tokenizer, split="test", max_seq_length=cfg.max_seq_length)
+        eval_sum_dataset = create_summarization_dataset(task, model.tokenizer, split="test", max_seq_length=cfg.max_seq_length)
+        eval_loader = build_summarization_dataloaders(eval_clm_dataset, eval_sum_dataset, device_eval_batch_size, drop_last=drop_last)
+        print("Building train loader...")
+        train_dataset = create_clm_dataset(task, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
+    else:
+        eval_dataset = create_lexglue_dataset(task, model.tokenizer, split="validation", max_seq_length=cfg.max_seq_length)
+        eval_loader = build_dataloader(task, eval_dataset, device_eval_batch_size, drop_last=drop_last)
+        print("Building train loader...")
+        train_dataset = create_lexglue_dataset(task, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
+
+    train_loader = build_dataloader(train_dataset, device_train_batch_size, drop_last=drop_last)
 
     # Optimizer
     optimizer = build_optimizer(cfg.optimizer, model)
@@ -199,5 +213,4 @@ if __name__ == '__main__':
         yaml_cfg = om.load(f)
     cli_cfg = om.from_cli(args_list)
     cfg: DictConfig = om.merge(yaml_cfg, cli_cfg)  # type: ignore
-    task = cfg.task
-    main(task, cfg)
+    main(cfg)

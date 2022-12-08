@@ -59,7 +59,7 @@ parameters:
 
   fsdp_config:
     sharding_strategy: FULL_SHARD
-    min_params: 1.0e9
+    min_params: 1.0e+9
     verbose: True
 
   # System

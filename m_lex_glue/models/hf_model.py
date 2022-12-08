@@ -1,18 +1,28 @@
+from typing import Any, Optional
+
+from composer.loss import binary_cross_entropy_with_logits
+from composer.metrics import CrossEntropy, LossMetric
+from composer.metrics.nlp import LanguageCrossEntropy
+from composer.models import HuggingFaceModel
 from omegaconf import DictConfig
+import torch
 from torchmetrics import Metric
 from torchmetrics.classification.accuracy import Accuracy
 from torchmetrics.classification.f_beta import F1Score
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMultipleChoice, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import (AutoConfig, AutoModelForCausalLM,
+                          AutoModelForMultipleChoice, AutoModelForSeq2SeqLM,
+                          AutoModelForSequenceClassification, AutoTokenizer,
+                          BeamSearchScorer, LogitsProcessorList, MaxLengthCriteria,
+                          MinLengthLogitsProcessor, StoppingCriteriaList)
 
-from composer.loss import binary_cross_entropy_with_logits
-from composer.models import HuggingFaceModel
-from composer.metrics import CrossEntropy, LossMetric
-from composer.metrics.nlp import LanguageCrossEntropy
-
-from m_lex_glue.data.data import multi_class, multi_label, multiple_choice_qa, summarization, task_example_types
+from m_lex_glue.data.tasks import (multi_class, multi_label,
+                                      multiple_choice_qa, summarization,
+                                      task_example_types)
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
-from m_lex_glue.metrics.modified_metrics import FloatAccuracy, FloatF1, RougeWithDetokenizer
-from m_lex_glue.models.gpt_for_multiple_choice import GPT2ForMultipleChoice, GPTJForMultipleChoice
+from m_lex_glue.metrics.modified_metrics import (FloatAccuracy, FloatF1,
+                                                 RougeWithDetokenizer)
+from m_lex_glue.models.gpt_for_multiple_choice import (GPT2ForMultipleChoice,
+                                                       GPTJForMultipleChoice)
 from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
 
 
@@ -31,6 +41,61 @@ class ComposerHFModelWithTokenizer(HuggingFaceModel):
         return self.train_metrics if is_train else self.eval_metrics
 
 
+class RougeableComposerHFModel(ComposerHFModelWithTokenizer):
+    """This subclass overrides eval_forward,
+    which must be passed batches during evaluation with a `eval_mode` key
+    This key allows it to know whether to do one forward pass (for CLM) or greedy decoding (for Rouge)"""
+
+    def __init__(
+        self,
+        *args,
+        min_length: int = 50,
+        max_length: int = 512,
+        num_beams: int = 1,
+        do_sample: bool = False,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.logits_processor = LogitsProcessorList(
+            [
+                MinLengthLogitsProcessor(min_length, eos_token_id=self.model.config.eos_token_id),
+            ]
+        )
+        self.max_length = max_length
+        self.num_beams = num_beams
+        self.do_sample = do_sample
+
+    def eval_forward(self, batch, outputs: Optional[Any] = None):
+        if outputs:
+            # In train eval...
+            return super().eval_forward(batch=batch, outputs=outputs)
+
+        # eval_mode should be present on eval_batches
+        mode = batch.get("eval_mode", ["clm"])[0]
+
+        if "eval_mode" in batch:
+            # delete this key as the forward pass calls **batch and will freak out about unexpected keys
+            del batch['eval_mode']
+
+        if mode == "clm":
+            # eval mode CLM evaluation
+            # this is handled fine by the parent class
+            return super().eval_forward(batch=batch, outputs=outputs)
+        else:
+            # "seq2seq" mode
+            outputs = self.model.generate(
+                batch['input_ids'],
+                max_new_tokens=self.max_length,
+                num_beams=self.num_beams,
+                do_sample=self.do_sample,
+                num_return_sequences=1,
+                remove_invalid_values=True,
+                logits_processor=self.logits_processor,
+            )
+
+            return outputs
+
+
 def get_huggingface_model(cfg: DictConfig):
     """Instantiate a single label or multi label SequenceClassification hf transformers model,
     or if the task is case_hold, a MultipleChoice model.
@@ -47,11 +112,11 @@ def get_huggingface_model(cfg: DictConfig):
         use_fast=False if "deberta" in cfg.model_name else True  # crazy byte conversion error
     )
 
-    task = task_example_types[cfg.task]
+    task_type = task_example_types[cfg.task]
     eval_metrics = None
 
-    # @TODO also allow seq2seq
-    if task == multi_class:
+
+    if task_type == multi_class:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
@@ -64,7 +129,7 @@ def get_huggingface_model(cfg: DictConfig):
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
-    elif task == multi_label:
+    elif task_type == multi_label:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             num_labels=len(TASK_NAME_TO_LABELS[cfg.task]),
@@ -82,7 +147,7 @@ def get_huggingface_model(cfg: DictConfig):
             use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
-    elif task == multiple_choice_qa:
+    elif task_type == multiple_choice_qa:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             finetuning_task=cfg.task,
@@ -107,7 +172,7 @@ def get_huggingface_model(cfg: DictConfig):
                 config=hf_config,
                 use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             )
-    elif task == summarization:
+    elif task_type == summarization:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             finetuning_task=cfg.task,
@@ -124,18 +189,23 @@ def get_huggingface_model(cfg: DictConfig):
                 use_auth_token=cfg.get('use_auth_token', None),
             )
         else:
-            # Need to figure out T5 models...
-            raise NotImplementedError("T5 models not yet supported!")
-            train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
-            eval_metrics = [
-                LanguageCrossEntropy(hf_config.vocab_size),
-                RougeWithDetokenizer(detokenizer=tokenizer),
-            ]
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
                 use_auth_token=cfg.get('use_auth_token', None),
             )
+            # t5 models have a discrepancy between model size and vocab size
+            # this causes issues because we automatically resize the model embeddings,
+            # but the hf_config.vocab_size doesn't match, so use len(tokenizer) instead
+            #
+            # this mismatch causes the warning you see:
+            # The number of tokens in the tokenizer and the number of tokens in the model
+            # are different. Resizing the model tokenizer to 32100 from 32128.
+            train_metrics = [LanguageCrossEntropy(len(tokenizer))]
+            eval_metrics = [
+                LanguageCrossEntropy(len(tokenizer)),
+                RougeWithDetokenizer(detokenizer=tokenizer),
+            ]
     else:
         raise ValueError(f"Your YAML file has the task set to {cfg.task}, which is invalid."
                          f"Please use a task in {list(task_example_types.keys())}")
@@ -150,11 +220,24 @@ def get_huggingface_model(cfg: DictConfig):
     if is_fsdp_able(model):
         prepare_hf_model_for_fsdp(model)
 
-    return ComposerHFModelWithTokenizer(
-        model=model,
-        tokenizer=tokenizer,
-        train_metrics=train_metrics,
-        eval_metrics=eval_metrics,
-        use_logits=True
-    )
-    
+    if task_type == summarization:
+        return RougeableComposerHFModel(
+            model=model,
+            tokenizer=tokenizer,
+            train_metrics=train_metrics,
+            eval_metrics=eval_metrics,
+            use_logits=True,
+            min_length=cfg.get("summary_min_length", 100),
+            max_length=cfg.get("summary_max_length", 512),
+            num_beams=cfg.get("num_beams", 1),
+            do_sample=cfg.get("sample_decoder", False),
+        )
+    else:
+        return ComposerHFModelWithTokenizer(
+            model=model,
+            tokenizer=tokenizer,
+            train_metrics=train_metrics,
+            eval_metrics=eval_metrics,
+            use_logits=True
+        )
+
