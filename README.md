@@ -2,6 +2,14 @@
 
 This repo uses the [Mosaic CLI](https://internal.mcli.docs.mosaicml.com/index.html) to run [lex-GLUE](https://huggingface.co/datasets/lex_glue) fine-tuning and evaluation on the Mosaic Cloud.
 
+## Debugging
+
+For ROUGE to work, you have to install nltk (in requirements, not hard) and download punkt. From shell:
+
+```python
+python -c "import nltk;nltk.download('punkt')"
+```
+
 ## Notes on tasks
 
 Multiple-choice QA is like single label classification, except it needs to make that classification based on a tuple of `(input: str, choices: List[str])` (choices is always length 5). There is a task-specific HF head for this for some models; I wrote one for `gpt` style models, but it needs testing. Be suspicious.

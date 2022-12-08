@@ -78,7 +78,9 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
         # @TODO make this configurable
-        block_size = tokenizer.model_max_length
+        # WHY DOES THIS CASUE ROUGE TO FAIL if we use model max length??
+        # model_max_length for t5 is wrongly set to half of the true value... and it works :crazy:
+        block_size = 512 # tokenizer.model_max_length
         concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
         total_length = len(concatenated_examples[list(model_inputs.keys())[0]])
         # We drop the small remainder, we could add padding
@@ -100,7 +102,7 @@ def create_clm_dataset(
     task: str,
     tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
     split: str,
-    max_seq_length: int = 1024,
+    max_seq_length: int = 512,
     max_retries: int = 10,
     num_workers: int = 0,
 ):
@@ -138,7 +140,7 @@ def create_summarization_dataset(
     task: str,
     tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
     split: str,
-    max_seq_length: int = 1024,
+    max_seq_length: int = 512,
     max_retries: int = 10,
     num_workers: int = 0,
 ):
@@ -166,7 +168,7 @@ def create_summarization_dataset(
         num_proc=None if num_workers == 0 else num_workers,
         batch_size=1000,
         remove_columns=columns_to_remove,
-        load_from_cache_file=True,
+        load_from_cache_file=False,
     )
     dataset.set_format(type="torch")
     return dataset
