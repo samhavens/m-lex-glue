@@ -83,14 +83,24 @@ class RougeableComposerHFModel(ComposerHFModelWithTokenizer):
             return super().eval_forward(batch=batch, outputs=outputs)
         else:
             # "seq2seq" mode
+
+            # beam search settings
+            # outputs = self.model.generate(
+            #     batch['input_ids'],
+            #     max_new_tokens=self.max_length,
+            #     num_beams=self.num_beams,
+            #     do_sample=self.do_sample,
+            #     num_return_sequences=1,
+            #     remove_invalid_values=True,
+            #     logits_processor=self.logits_processor,
+            # )
+
+            # contrastive decoding settings
             outputs = self.model.generate(
                 batch['input_ids'],
                 max_new_tokens=self.max_length,
-                num_beams=self.num_beams,
-                do_sample=self.do_sample,
-                num_return_sequences=1,
-                remove_invalid_values=True,
-                logits_processor=self.logits_processor,
+                penalty_alpha=0.6,
+                top_k=5, 
             )
 
             return outputs
