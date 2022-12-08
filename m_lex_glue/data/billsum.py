@@ -20,16 +20,33 @@ log = logging.getLogger(__name__)
 
 
 def get_prefix_suffix(tokenizer) -> Tuple[str, str]:
-    """Currently always returns the same value for any tokenizer, but only T5 pretraining
-    includes task prefixes. I don't see why they wouldn't be useful everywhere though in a
-    multi-task environment"""
-    prefix = "summarize: "
-    suffix = "\n"
+    """Task prefixes / suffixes are in the papers for (m)t5, but a good summary is
+    https://huggingface.co/course/chapter7/5?fw=pt#models-for-text-summarization"""
+    if "mt5" in tokenizer.name_or_path:
+        model_style = "mt5"
+    elif any(clue in tokenizer.name_or_path for clue in ["t5", "ul2", "t0", "bart"]):
+        model_style = "t5"
+    elif "gpt" in tokenizer.name_or_path:
+        model_style = "gpt"
+
+    if model_style == "t5":
+        prefix = "summarize: "
+        suffix = "\n"
+    elif model_style == "gpt":
+        # prefix = ""
+        # suffix = " TL;DR "
+        # suffix is a pain to implement with truncation and padding, use t5-style for now
+        prefix = "summarize: "
+        suffix = "\n"
+    else:
+        prefix, suffix = "", ""
     return prefix, suffix
 
 
 def get_summarization_preprocessor(tokenizer, max_seq_length):
-    """Maybe we should not tokenize the targets if this is only used for Rouge"""
+    """BillSum https://arxiv.org/pdf/1910.00523.pdf
+    The BillSum corpus focuses on mid-length legislation from 5,000 to 20,000 character in length
+    Summaries are ~200 to 5,000 characters"""
     text_column = summarization[1]
     summary_column = summarization[2]
 
@@ -44,12 +61,13 @@ def get_summarization_preprocessor(tokenizer, max_seq_length):
                 targets.append(examples[summary_column][i])
 
         inputs = [prefix + inp + suffix for inp in inputs]
+
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
         labels = tokenizer(targets, max_length=max_seq_length, padding="max_length", truncation=True)
 
-        # replace all tokenizer.pad_token_id in the labels by -100 to ignore
-        # padding in the loss
+        # replace all tokenizer.pad_token_id in the labels by -100 to
+        # ignore padding in the loss
         labels["input_ids"] = [
             [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
         ]
@@ -78,7 +96,7 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
         # @TODO make this configurable
-        # WHY DOES THIS CASUE ROUGE TO FAIL if we use model max length??
+        # WHY DOES THIS CAUSE ROUGE TO FAIL if we use model max length??
         # model_max_length for t5 is wrongly set to half of the true value... and it works :crazy:
         block_size = 512 # tokenizer.model_max_length
         concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
@@ -221,6 +239,6 @@ def build_summarization_dataloaders(
     # if the name of the metric changes
     # NOTE be very careful that metric_names is a list... it won't fail if you put in a string, but it won't work either
     return [
-        Evaluator(label=RougeWithDetokenizer.__name__, dataloader=sum_dl, metric_names=[RougeWithDetokenizer.__name__]),
         Evaluator(label="LanguageCrossEntropy", dataloader=clm_dl, metric_names=["LanguageCrossEntropy"]),
+        Evaluator(label=RougeWithDetokenizer.__name__, dataloader=sum_dl, metric_names=[RougeWithDetokenizer.__name__]),
     ]

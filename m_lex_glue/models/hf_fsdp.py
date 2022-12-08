@@ -17,6 +17,10 @@ _SUPPORTED_HF_MODELS = (
     GPTJModel,
     GPTNeoModel,
     GPTNeoXModel,
+    GPT2LMHeadModel,
+    GPTJForCausalLM,
+    GPTNeoForCausalLM,
+    GPTNeoXForCausalLM,
 )
 
 _WEIGHT_TIED_HF_MODELS = (
@@ -36,7 +40,7 @@ _HF_MODEL_BLOCKS = (
 
 
 def is_fsdp_able(model) -> bool:
-    return isinstance(model, _SUPPORTED_HF_MODELS)
+    return isinstance(model, _SUPPORTED_HF_MODELS) or isinstance(model.transformer, _SUPPORTED_HF_MODELS)
 
 
 def prepare_hf_model_for_fsdp(model):

@@ -85,23 +85,24 @@ class RougeableComposerHFModel(ComposerHFModelWithTokenizer):
             # "seq2seq" mode
 
             # beam search settings
-            # outputs = self.model.generate(
-            #     batch['input_ids'],
-            #     max_new_tokens=self.max_length,
-            #     num_beams=self.num_beams,
-            #     do_sample=self.do_sample,
-            #     num_return_sequences=1,
-            #     remove_invalid_values=True,
-            #     logits_processor=self.logits_processor,
-            # )
-
-            # contrastive decoding settings
             outputs = self.model.generate(
                 batch['input_ids'],
                 max_new_tokens=self.max_length,
-                penalty_alpha=0.6,
-                top_k=5, 
+                num_beams=self.num_beams,
+                do_sample=self.do_sample,
+                num_return_sequences=1,
+                remove_invalid_values=True,
+                logits_processor=self.logits_processor,
             )
+
+            # contrastive decoding settings
+            # VERY slow, need to verify if there is any gain
+            # outputs = self.model.generate(
+            #     batch['input_ids'],
+            #     max_new_tokens=self.max_length,
+            #     penalty_alpha=0.6,
+            #     top_k=5,
+            # )
 
             return outputs
 
@@ -199,6 +200,7 @@ def get_huggingface_model(cfg: DictConfig):
                 use_auth_token=cfg.get('use_auth_token', None),
             )
         else:
+            print("t5 is untested and there may be bugs in this implementation!")
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
@@ -229,6 +231,9 @@ def get_huggingface_model(cfg: DictConfig):
     # For very large models which will be distributed over multiple GPUs
     if is_fsdp_able(model):
         prepare_hf_model_for_fsdp(model)
+    elif is_fsdp_able(model.transformer):
+        # for models which have a small task head on top of a large model
+        prepare_hf_model_for_fsdp(model.transformer)
 
     if task_type == summarization:
         return RougeableComposerHFModel(
@@ -237,9 +242,9 @@ def get_huggingface_model(cfg: DictConfig):
             train_metrics=train_metrics,
             eval_metrics=eval_metrics,
             use_logits=True,
-            min_length=cfg.get("summary_min_length", 100),
-            max_length=cfg.get("summary_max_length", 512),
-            num_beams=cfg.get("summary_num_beams", 1),
+            min_length=cfg.get("summary_min_length", 60),  # should depend on corpus stats
+            max_length=cfg.get("summary_max_length", 512), # limited by min(corpus_max, model_max_length)
+            num_beams=cfg.get("summary_num_beams", 1),     # trade speed for quality
             do_sample=cfg.get("summary_do_sample", False),
         )
     else:
