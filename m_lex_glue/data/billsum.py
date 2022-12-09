@@ -97,8 +97,8 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
 
         # @TODO make this configurable
         # WHY DOES THIS CAUSE ROUGE TO FAIL if we use model max length??
-        # model_max_length for t5 is wrongly set to half of the true value... and it works :crazy:
-        block_size = 512 # tokenizer.model_max_length
+        # might be a CPU-only error
+        block_size = max_seq_length # tokenizer.model_max_length # 512  # 2048
         concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
         total_length = len(concatenated_examples[list(model_inputs.keys())[0]])
         # We drop the small remainder, we could add padding
