@@ -2,16 +2,10 @@
 from typing import Tuple
 import transformers
 from torch import nn
-from transformers.models.gpt2.modeling_gpt2 import GPT2Block, GPT2LMHeadModel, GPT2Model
-from transformers.models.gptj.modeling_gptj import (GPTJBlock,
-                                                    GPTJForCausalLM,
-                                                    GPTJModel)
-from transformers.models.gpt_neo.modeling_gpt_neo import (GPTNeoBlock,
-                                                          GPTNeoForCausalLM,
-                                                          GPTNeoModel)
-from transformers.models.gpt_neox.modeling_gpt_neox import (GPTNeoXModel,
-                                                            GPTNeoXForCausalLM,
-                                                            GPTNeoXLayer)
+from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
+from transformers.models.gptj.modeling_gptj import GPTJForCausalLM, GPTJModel
+from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoForCausalLM, GPTNeoModel
+from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXModel, GPTNeoXForCausalLM
 
 from m_lex_glue.utils import findattr
 
