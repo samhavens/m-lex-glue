@@ -229,7 +229,8 @@ def get_huggingface_model(cfg: DictConfig):
         model.config.pad_token_id = model.config.eos_token_id  # type: ignore
 
     # For very large models which will be distributed over multiple GPUs
-    if is_fsdp_able(model):
+    fsdp_config = cfg.get('fsdp_config', None)
+    if fsdp_config is not None and is_fsdp_able(model):
         prepare_hf_model_for_fsdp(model)
     elif is_fsdp_able(model.transformer):
         # for models which have a small task head on top of a large model
