@@ -146,7 +146,7 @@ def main(cfg: DictConfig) -> None:
 
     # Optimizer
     optimizer = build_optimizer(cfg.optimizer, model)
-    
+
     # Scheduler
     scheduler = build_scheduler(cfg.scheduler)
 
