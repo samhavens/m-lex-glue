@@ -1,4 +1,6 @@
 # Adapted from https://github.com/mosaicml/benchmarks/blob/main/llm/src/hf_causal_lm.py
+# some helper functions from https://github.com/CarperAI/trlx/blob/main/trlx/utils/modeling.py
+
 from typing import Tuple
 import transformers
 from torch import nn
@@ -22,8 +24,6 @@ _SUPPORTED_HF_MODELS = (
 )
 
 
-# PLAN: use this method and a few others to replace the lookup
-# "does this model work" and "what blocks do we wrap"
 def hf_get_causal_base_model(model: transformers.AutoModelForCausalLM) -> nn.Module:
     """Returns the causal decoder backbone of the specified HuggingFace transformers
     model.
@@ -81,6 +81,9 @@ def hf_get_tied_embedding_weights(model: nn.Module) -> nn.Module:
 # REWRITE THIS TO NOT USE LOOKUP!
 # Or at least add BLOOM and OPT
 # also... T5??
+# Honestly we want to support huge BERTs too, so I think this should be totally generic
+# all LM heads have weight tying
+# https://discuss.huggingface.co/t/what-is-the-tie-word-embeddings-option-exactly-doing/8483
 def is_fsdp_able(model) -> bool:
     causal_base_model = hf_get_causal_base_model(model)
     return isinstance(model, _SUPPORTED_HF_MODELS) or isinstance(causal_base_model, _SUPPORTED_HF_MODELS)
@@ -93,9 +96,10 @@ def prepare_hf_model_for_fsdp(model):
     assert is_fsdp_able(model), f"FSDP support not available for this model"
     causal_base_model = hf_get_causal_base_model(model)
     model_block = hf_get_causal_hidden_layers(model)[0]
+    block_type = type(model_block)
     lm_head = hf_get_causal_hidden_layers(model)
     tied_embeddings = hf_get_tied_embedding_weights(causal_base_model)
-    # When using the HF Causal LM models,
+    # When using the HF LM models,
     # the weights of the self.lm_head and self.transformer.wte are tied.
     # This tying occurs inside the `self.post_init()` function.
     # This is a hurdle for FSDP because they need to be in the same FSDP block
@@ -106,6 +110,6 @@ def prepare_hf_model_for_fsdp(model):
         lm_head._fsdp_wrap = False
 
     # FSDP Wrap and Activation Checkpoint every GPT2Block
-    model.fsdp_wrap_fn = lambda module: isinstance(module, model_block)
+    model.fsdp_wrap_fn = lambda module: isinstance(module, block_type)
     model.activation_checkpointing_fn = lambda module: isinstance(
-        module, model_block)
+        module, block_type)
