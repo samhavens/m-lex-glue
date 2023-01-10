@@ -188,7 +188,7 @@ def main(cfg: DictConfig) -> None:
         loggers=loggers,
         callbacks=callbacks,
         precision=cfg.precision,
-        grad_clip_norm=cfg.grad_clip_norm,
+        # grad_clip_norm=cfg.grad_clip_norm,  # now an algorithm
         grad_accum=cfg.get('grad_accum', 'auto'),
         fsdp_config=fsdp_config,  # type: ignore
         save_folder=cfg.get('save_folder', None),
