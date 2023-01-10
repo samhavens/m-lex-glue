@@ -21,7 +21,7 @@ command: >-
 optimization_level: 0
 parameters:
   task: &task billsum
-  max_seq_length: 8192
+  max_seq_length: &max_seq_length 8192
   model_type: mosaic
   model_name: &model_name legalgpt-3b
   tokenizer_name: &tokenizer_name sam-mosaic/pile-of-law-tokenizer
@@ -33,12 +33,12 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
-    # device: meta
+    device: meta
     d_model: 2560
     n_heads: 20  # Modified 32->20 so that d_head == 128 to satisfy FlashAttention
     n_layers: 32
     mlp_ratio: 4
-    max_seq_len: *max_seq_len
+    max_seq_len: *max_seq_length
     vocab_size: 52000
     init_std: 0.02
     attn_pdrop: 0.0
