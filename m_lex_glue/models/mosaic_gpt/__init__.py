@@ -51,7 +51,7 @@ def get_mosaic_model_hf_wrap(cfg: DictConfig) -> ComposerMosaicGPT:
         use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
     )
     tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.model_max_length = cfg.max_seq_len
+    tokenizer.model_max_length = cfg.max_seq_length
 
     train_metrics = [LanguageCrossEntropy(cfg.model.vocab_size)]
     eval_metrics = [
