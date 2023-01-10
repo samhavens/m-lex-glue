@@ -45,9 +45,9 @@ def get_mosaic_model_hf_wrap(cfg: DictConfig) -> ComposerMosaicGPT:
 
     Currently only defined for summarization; need to write task-specific heads (or convert tasks to seq2seq)
     """
-    train_metrics = [LanguageCrossEntropy(cfg.vocab_size)]
+    train_metrics = [LanguageCrossEntropy(cfg.model.vocab_size)]
     eval_metrics = [
-        LanguageCrossEntropy(cfg.vocab_size),
+        LanguageCrossEntropy(cfg.model.vocab_size),
         RougeWithDetokenizer(detokenizer=tokenizer),
     ]
     tokenizer = AutoTokenizer.from_pretrained(

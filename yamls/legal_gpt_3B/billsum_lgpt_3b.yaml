@@ -33,6 +33,7 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
+    vocab_size: 52000
 
   scheduler:
     name: linear_decay_with_warmup
