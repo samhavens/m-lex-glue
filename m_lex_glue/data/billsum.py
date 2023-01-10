@@ -26,7 +26,7 @@ def get_prefix_suffix(tokenizer) -> Tuple[str, str]:
         model_style = "mt5"
     elif any(clue in tokenizer.name_or_path for clue in ["t5", "ul2", "t0", "bart"]):
         model_style = "t5"
-    elif "gpt" in tokenizer.name_or_path:
+    else:
         model_style = "gpt"
 
     if model_style == "t5":
