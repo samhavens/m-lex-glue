@@ -236,7 +236,7 @@ class MGPT(nn.Module):
 
     def __init__(self, cfg: DictConfig):
         super().__init__()
-        assert cfg.name == 'mosaic_gpt', f'Tried to build MosaicGPT model with cfg.name={cfg.name}'
+        # assert cfg.name == 'mosaic_gpt', f'Tried to build MosaicGPT model with cfg.name={cfg.name}'
         self.cfg = cfg
         if cfg.attn_impl == 'torch':
             self.causal_attn_cls = TorchCausalAttention
@@ -411,7 +411,7 @@ class ComposerMosaicGPT(ComposerModel):
 
     def __init__(self, cfg, tokenizer, train_metrics=None, eval_metrics=None):
         super().__init__()
-        self.model = MosaicGPTForCausalLM(cfg)
+        self.model = MosaicGPTForCausalLM(cfg.model)
         self.tokenizer = tokenizer
         self.__num_fwd_flops = None
         self.train_metrics = {metric.__class__.__name__: metric for metric in train_metrics}  # type: ignore
