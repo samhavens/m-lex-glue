@@ -5,3 +5,5 @@ nltk==3.7  # required for rougeL and rougeLsum
 omegaconf<3
 sentencepiece>=0.1.97
 transformers>=4.9.0
+# for MosaicGPT
+triton==2.0.0.dev20221103
