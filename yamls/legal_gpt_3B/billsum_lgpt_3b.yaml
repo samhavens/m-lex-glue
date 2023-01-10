@@ -67,15 +67,15 @@ parameters:
   eval_interval: 1ep
 
   global_train_batch_size: 32
-  global_eval_batch_size: 32
+  global_eval_batch_size: 16
 
   # System
   seed: 42
-  grad_accum: auto
+  grad_accum: 8
   precision: bf16
   # Logging
   progress_bar: true
-  log_to_console: true
+  # log_to_console: true
   callbacks:
     speed_monitor:
       window_size: 500
