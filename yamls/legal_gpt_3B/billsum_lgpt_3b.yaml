@@ -2,7 +2,7 @@ run_name: &run_name billsum-lgpt-3b-8192sl
 gpu_type: a100_80gb
 gpu_num: 8
 platform: r1z1
-image: mosaicml/pytorch:1.12.1_cu116-python3.9-ubuntu20.04
+image: mosaicml/composer:0.12.0
 integrations:
   - integration_type: "wandb"
     project: &wandb_project lex-glue
@@ -77,3 +77,8 @@ parameters:
 
   starting_checkpoint_load_path: s3://mosaicml-internal-checkpoints-shared/nlp/mmllllm/vitaliy/mmllllm-3b-8k-b1mt-tpol-tflashibi-VupRZm/checkpoints/ep0-ba51500-rank0.pt
   local_pretrain_checkpoints_folder: /tmp/checkpoints/lgtp-3b
+
+  fsdp_config:
+  sharding_strategy: FULL_SHARD
+  min_params: 1.0e+9
+  verbose: True

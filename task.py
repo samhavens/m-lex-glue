@@ -25,6 +25,7 @@ from m_lex_glue.data.datasets import create_lexglue_dataset
 from m_lex_glue.data.billsum import create_clm_dataset, create_summarization_dataset, build_summarization_dataloaders
 from m_lex_glue.labels import TASK_NAME_TO_LABELS
 from m_lex_glue.models.hf_model import get_huggingface_model
+from m_lex_glue.models.mosaic_gpt import get_mosaic_model_hf_wrap
 
 
 def build_dataloader(dataset, device_batch_size, drop_last=False, shuffle=False, **kwargs):
@@ -97,7 +98,11 @@ def build_scheduler(cfg):
 def build_model(cfg: DictConfig, task: str):
     print(f"task: {task}")
     print(f"Number of labels: {len(TASK_NAME_TO_LABELS[task])}")
-    model = get_huggingface_model(cfg)
+    print(f"Model Type: {cfg.model_type}")
+    if cfg.model_type == "huggingface":
+        model = get_huggingface_model(cfg)
+    else:
+        model = get_mosaic_model_hf_wrap(cfg)
     print("Model Name:", model.__class__.__name__)
     print("Metrics:", model.metrics())
     print("Vocabulary Size:", len(model.tokenizer))
