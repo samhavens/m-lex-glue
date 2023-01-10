@@ -45,24 +45,25 @@ def get_mosaic_model_hf_wrap(cfg: DictConfig) -> ComposerMosaicGPT:
 
     Currently only defined for summarization; need to write task-specific heads (or convert tasks to seq2seq)
     """
-    train_metrics = [LanguageCrossEntropy(cfg.model.vocab_size)]
-    eval_metrics = [
-        LanguageCrossEntropy(cfg.model.vocab_size),
-        RougeWithDetokenizer(detokenizer=tokenizer),
-    ]
     tokenizer = AutoTokenizer.from_pretrained(
         cfg.tokenizer_name,
         padding_side="left",
         use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
     )
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.model_max_length = cfg.max_seq_len
+
+    train_metrics = [LanguageCrossEntropy(cfg.model.vocab_size)]
+    eval_metrics = [
+        LanguageCrossEntropy(cfg.model.vocab_size),
+        RougeWithDetokenizer(detokenizer=tokenizer),
+    ]
+
     cm = ComposerMosaicGPT(cfg, tokenizer=tokenizer, train_metrics=train_metrics, eval_metrics=eval_metrics)
+    cm.tokenizer = tokenizer
 
     checkpoint_path = download_starting_checkpoint(cfg.starting_checkpoint_load_path, cfg.local_pretrain_checkpoints_folder)
     checkpoint = torch.load(checkpoint_path)
     cm.model.load_state_dict(checkpoint['state']['model'])
-    cm.model = cm.model.to(torch.bfloat16)  # important for triton to be fp16 or bf16
 
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.model_max_length = cfg.max_seq_len
-    cm.tokenizer = tokenizer
     return cm
