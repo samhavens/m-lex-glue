@@ -526,9 +526,14 @@ class MosaicGPTForCausalLM(PreTrainedModel):
     def forward(self, *args, **kwargs):
         if "input_ids" in kwargs:
             iids = kwargs['input_ids']
+        else:
+            iids = None
         if "key_padding_mask" in kwargs:
             key_padding_mask = kwargs["key_padding_mask"]
         elif "attention_mask" in kwargs:
             key_padding_mask = kwargs["attention_mask"]
-        logits = self.model.forward(input_ids=kwargs['input_ids'], key_padding_mask=key_padding_mask)
+        if iids:
+            logits = self.model.forward(input_ids=iids, key_padding_mask=key_padding_mask)
+        else:
+            logits = self.model.forward(*args, key_padding_mask=key_padding_mask)
         return CausalLMOutput(logits=logits)
