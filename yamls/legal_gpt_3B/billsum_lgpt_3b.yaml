@@ -33,7 +33,7 @@ parameters:
     use_pretrained: true
     pretrained_model_name: *model_name
     tokenizer_name: *tokenizer_name
-    device: meta
+    device: cuda
     d_model: 2560
     n_heads: 20  # Modified 32->20 so that d_head == 128 to satisfy FlashAttention
     n_layers: 32
