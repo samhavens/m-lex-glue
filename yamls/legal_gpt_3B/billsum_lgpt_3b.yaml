@@ -75,7 +75,7 @@ parameters:
   precision: bf16
   # Logging
   progress_bar: true
-  # log_to_console: true
+  log_to_console: true
   callbacks:
     speed_monitor:
       window_size: 500
@@ -90,10 +90,10 @@ parameters:
   starting_checkpoint_load_path: s3://mosaicml-internal-checkpoints-shared/nlp/mmllllm/vitaliy/mmllllm-3b-8k-b1mt-tpol-tflashibi-VupRZm/checkpoints/ep0-ba51500-rank0.pt
   local_pretrain_checkpoints_folder: /tmp/checkpoints/lgtp-3b
 
-  fsdp_config:
-    sharding_strategy: FULL_SHARD
-    min_params: 2e8
-    mixed_precision: DEFAULT
-    activation_checkpointing: true
-    activation_cpu_offload: false
-    verbose: true
+  # fsdp_config:
+  #   sharding_strategy: FULL_SHARD
+  #   min_params: 2e8
+  #   mixed_precision: DEFAULT
+  #   activation_checkpointing: true
+  #   activation_cpu_offload: false
+  #   verbose: true
