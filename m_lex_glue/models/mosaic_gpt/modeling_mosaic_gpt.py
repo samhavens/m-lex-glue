@@ -12,14 +12,16 @@ This version is from the mosaicGPT repo, where I am attempting to make this a HF
 
 import math
 from functools import partial
-from typing import Any, Optional
-from composer import ComposerModel
+from typing import Any, List, Optional, Union
 
 import torch
+import transformers
 import torch.nn as nn
 import torch.nn.functional as F
+from composer import ComposerModel
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
+from torchmetrics import Metric
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutput
 
@@ -409,8 +411,15 @@ class MGPT(nn.Module):
 # modified slightly from examples/llm to support custom training/eval Metrics/Evaluators
 class ComposerMosaicGPT(ComposerModel):
 
-    def __init__(self, cfg, tokenizer, train_metrics=None, eval_metrics=None):
+    def __init__(
+        self,
+        cfg: DictConfig,
+        tokenizer: Union[transformers.PreTrainedTokenizer, transformers.PreTrainedTokenizerFast],
+        train_metrics: Optional[List[Metric]] = None,
+        eval_metrics: Optional[List[Metric]] = None,
+        ):
         super().__init__()
+        self.cfg = cfg
         self.model = MosaicGPTForCausalLM(cfg.model)
         self.tokenizer = tokenizer
         self.__num_fwd_flops = None
@@ -430,26 +439,10 @@ class ComposerMosaicGPT(ComposerModel):
         return self.model(batch['input_ids'],
                           key_padding_mask=batch['attention_mask'].bool())
 
-    def original_eval_forward(self, batch, outputs: Optional[Any] = None):
-        output = outputs if outputs else self.forward(batch)
-        if self.use_logits or batch.get('mode', None) == 'lm_task':
-            self.labels = batch.pop('labels')
-            if self.config.use_return_dict:
-                output = output['logits']
-            else:
-                # logits are at index 1 in the output tuple
-                output = output[1]
-
-            # if we are in the single class case, then remove the classes dimension
-            if output.shape[1] == 1:
-                output = output.squeeze(dim=1)
-
-        return output
-
     def eval_forward(self, batch, outputs: Optional[Any] = None):
         if outputs:
             # In train eval...
-            return self.original_eval_forward(batch=batch, outputs=outputs)
+            return outputs if outputs else self.forward(batch)
 
         # eval_mode should be present on eval_batches
         mode = batch.get("eval_mode", ["clm"])[0]
@@ -461,7 +454,7 @@ class ComposerMosaicGPT(ComposerModel):
         if mode == "clm":
             # eval mode CLM evaluation
             # this is handled fine by the parent class
-            return self.original_eval_forward(batch=batch, outputs=outputs)
+            return outputs if outputs else self.forward(batch)
         else:
             # "seq2seq" mode
 
