@@ -482,6 +482,7 @@ class ComposerMosaicGPT(ComposerModel):
         return self.train_metrics if is_train else self.eval_metrics
 
     def update_metric(self, batch, outputs, metric):
+        outputs = outputs.logits if isinstance(outputs, CausalLMOutput) else outputs
         outputs = outputs.view(-1, outputs.size(-1))
         targets = self.get_targets(batch).view(-1)
         metric.update(outputs, targets)
