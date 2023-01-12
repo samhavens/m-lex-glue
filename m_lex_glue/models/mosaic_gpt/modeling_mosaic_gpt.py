@@ -430,10 +430,26 @@ class ComposerMosaicGPT(ComposerModel):
         return self.model(batch['input_ids'],
                           key_padding_mask=batch['attention_mask'].bool())
 
+    def original_eval_forward(self, batch, outputs: Optional[Any] = None):
+        output = outputs if outputs else self.forward(batch)
+        if self.use_logits or batch.get('mode', None) == 'lm_task':
+            self.labels = batch.pop('labels')
+            if self.config.use_return_dict:
+                output = output['logits']
+            else:
+                # logits are at index 1 in the output tuple
+                output = output[1]
+
+            # if we are in the single class case, then remove the classes dimension
+            if output.shape[1] == 1:
+                output = output.squeeze(dim=1)
+
+        return output
+
     def eval_forward(self, batch, outputs: Optional[Any] = None):
         if outputs:
             # In train eval...
-            return super().eval_forward(batch=batch, outputs=outputs)
+            return self.original_eval_forward(batch=batch, outputs=outputs)
 
         # eval_mode should be present on eval_batches
         mode = batch.get("eval_mode", ["clm"])[0]
@@ -445,7 +461,7 @@ class ComposerMosaicGPT(ComposerModel):
         if mode == "clm":
             # eval mode CLM evaluation
             # this is handled fine by the parent class
-            return super().eval_forward(batch=batch, outputs=outputs)
+            return self.original_eval_forward(batch=batch, outputs=outputs)
         else:
             # "seq2seq" mode
 
@@ -482,7 +498,7 @@ class ComposerMosaicGPT(ComposerModel):
         if self.__num_fwd_flops:
             return self.__num_fwd_flops
         n_params = sum(p.numel() for p in self.parameters())
-        # the number of paramters is approximately the number of multiply-accumulates (MAC) in the network
+        # the number of parameters is approximately the number of multiply-accumulates (MAC) in the network
         # each MAC has 2 FLOPs - we multiply by 2 ie 2 * n_param
         # this gets us FLOPs / token
         params_flops_per_token = 2 * n_params
