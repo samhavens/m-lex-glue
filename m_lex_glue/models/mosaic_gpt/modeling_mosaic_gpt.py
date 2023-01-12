@@ -464,7 +464,8 @@ class ComposerMosaicGPT(ComposerModel):
 
     def loss(self, outputs, batch):
         targets = self.get_targets(batch)
-        return F.cross_entropy(outputs.view(-1, outputs.size(-1)),
+        logits = outputs.logits if isinstance(outputs, CausalLMOutput) else outputs
+        return F.cross_entropy(logits.view(-1, logits.size(-1)),
                                targets.view(-1),
                                ignore_index=-100)
 
