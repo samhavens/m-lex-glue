@@ -1,6 +1,8 @@
 import os
+from collections import OrderedDict
 from urllib.parse import urlparse
 
+import einops
 import torch
 from composer.metrics.nlp import LanguageCrossEntropy
 from composer.utils.file_helpers import get_file
@@ -40,6 +42,12 @@ def download_starting_checkpoint(starting_checkpoint_load_path: str,
 
     return local_path
 
+
+def convert_layer_names_to_torch(state_dict):
+    """Given a state dict for a MosaicGPT with Triton attention, convert the layer names to the format
+    torch expects so the weights can be loaded into torch-implemented attention
+    """
+
 def get_mosaic_model_hf_wrap(cfg: DictConfig) -> ComposerMosaicGPT:
     """This returns a Composer Model, which wraps a HuggingFace model, which wraps MosaicGPT
 
@@ -64,6 +72,35 @@ def get_mosaic_model_hf_wrap(cfg: DictConfig) -> ComposerMosaicGPT:
 
     checkpoint_path = download_starting_checkpoint(cfg.starting_checkpoint_load_path, cfg.local_pretrain_checkpoints_folder)
     checkpoint = torch.load(checkpoint_path)
-    cm.model.load_state_dict(checkpoint['state']['model'])
+
+    try:
+        # will work if the pretrained model and current config have the same attn_impl
+        cm.model.load_state_dict(checkpoint['state']['model'])
+    except RuntimeError as e:
+        # if we are loading Triton trained weights into Torch, need to manipulate a bit
+        if (
+            'Missing key(s) in state_dict: "model.transformer.blocks.0.causal_attn.mhsa.in_proj_weight"' in str(e) 
+            and 'Unexpected key(s) in state_dict: "model.transformer.blocks.0.causal_attn.mhsa.Wqkv.weight"' in str(e)
+        ):
+            # converting from triton to torch
+            triton_2_torch = {
+                "Wqkv.weight": "in_proj_weight",
+                "Wqkv.bias": "in_proj_bias"
+            }
+            t2t_keys = triton_2_torch.keys()
+            new_state_dict = OrderedDict()
+            for k, v in checkpoint['state']['model'].items():
+                if any(ttk in k for ttk in t2t_keys):
+                    for ttk, ttv in triton_2_torch.items():
+                        if ttk in k:
+                            new_k = k.replace(ttk, ttv)
+                            new_state_dict[new_k] = v
+                else:
+                    new_state_dict[k] = v
+            # now need to reshape attn_mask from [1, 12, 1, 8192] to [12, 8192, 8192]
+            torch_mask = einops.rearrange(new_state_dict['model.attn_mask'], '1 h 1 s -> h s')
+            torch_mask = einops.repeat(torch_mask, 'h s -> h s_again s', s_again=8192)
+            new_state_dict['model.attn_mask'] = torch_mask
+            cm.model.load_state_dict(new_state_dict)
 
     return cm
