@@ -129,7 +129,6 @@ def get_huggingface_model(cfg: DictConfig):
 
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_name,
-        use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
         use_fast=False if "deberta" in cfg.model_name else True  # crazy byte conversion error
     )
 
@@ -147,7 +146,6 @@ def get_huggingface_model(cfg: DictConfig):
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
             config=hf_config,
-            use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_type == multi_label:
@@ -165,7 +163,6 @@ def get_huggingface_model(cfg: DictConfig):
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
             config=hf_config,
-            use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             ignore_mismatched_sizes=True,  # showed up with DeBERTa
         )
     elif task_type == multiple_choice_qa:
@@ -179,26 +176,23 @@ def get_huggingface_model(cfg: DictConfig):
             model = GPT2ForMultipleChoice.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
-                use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             )
         elif 'gptj' in cfg.model_name:
             model = GPTJForMultipleChoice.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
-                use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             )
         else:
             model = AutoModelForMultipleChoice.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
-                use_auth_token=cfg.get('use_auth_token', None),  # for private HF Hub models
             )
     elif task_type == summarization:
         hf_config  = AutoConfig.from_pretrained(
             cfg.model_name,
             finetuning_task=cfg.task,
         )
-        if 'gpt' in cfg.model_name:
+        if "gpt" in cfg.model_name:
             train_metrics = [LanguageCrossEntropy(hf_config.vocab_size)]
             eval_metrics = [
                 LanguageCrossEntropy(hf_config.vocab_size),
@@ -207,14 +201,22 @@ def get_huggingface_model(cfg: DictConfig):
             model = AutoModelForCausalLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
-                use_auth_token=cfg.get('use_auth_token', None),
             )
-        else:
-            print("t5 is untested and there may be bugs in this implementation!")
+        elif "opt" in cfg.model_name or "bloom" in cfg.model_name:
+            train_metrics = [LanguageCrossEntropy(len(tokenizer))]
+            eval_metrics = [
+                LanguageCrossEntropy(len(tokenizer)),
+                RougeWithDetokenizer(detokenizer=tokenizer),
+            ]
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.model_name,
+                config=hf_config,
+            )
+        elif "t5" in cfg.model_name:
+            print("\n\nt5 is untested! There are likely bugs in this implementation!\n\n")
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 cfg.model_name,
                 config=hf_config,
-                use_auth_token=cfg.get('use_auth_token', None),
             )
             # t5 models have a discrepancy between model size and vocab size
             # this causes issues because we automatically resize the model embeddings,
@@ -240,11 +242,8 @@ def get_huggingface_model(cfg: DictConfig):
 
     # For very large models which will be distributed over multiple GPUs
     fsdp_config = cfg.get('fsdp_config', None)
-    if fsdp_config is not None and is_fsdp_able(model):
+    if fsdp_config is not None:
         prepare_hf_model_for_fsdp(model)
-    elif is_fsdp_able(model.transformer):
-        # for models which have a small task head on top of a large model
-        prepare_hf_model_for_fsdp(model.transformer)
 
     if task_type == summarization:
         return RougeableComposerHFModel(

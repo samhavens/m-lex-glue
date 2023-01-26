@@ -36,8 +36,8 @@ def get_prefix_suffix(tokenizer) -> Tuple[str, str]:
         # prefix = ""
         # suffix = " TL;DR "
         # suffix is a pain to implement with truncation and padding, use t5-style for now
-        prefix = "summarize: "
-        suffix = "\n"
+        prefix = "SUMMARIZE: "
+        suffix = "\nSUMMARY: "
     else:
         prefix, suffix = "", ""
     return prefix, suffix
@@ -64,6 +64,9 @@ def get_summarization_preprocessor(tokenizer, max_seq_length):
 
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
+        # for ALiBi models we don't want to truncate
+        # pad to multiple of 128 for triton
+        # labels = tokenizer(targets, max_length=max_seq_length, padding="longest", truncation=False, pad_to_multiple_of=128)
         labels = tokenizer(targets, max_length=max_seq_length, padding="max_length", truncation=True)
 
         # replace all tokenizer.pad_token_id in the labels by -100 to
@@ -93,6 +96,9 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
                 targets.append(examples[summary_column][i])
 
         inputs = [prefix + inp + suffix for inp in inputs]
+        # for ALiBi models we don't want to truncate
+        # pad to multiple of 128 for triton
+        # model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="longest", truncation=False, pad_to_multiple_of=128)
         model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
 
         # @TODO make this configurable
@@ -102,7 +108,7 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
         concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
         total_length = len(concatenated_examples[list(model_inputs.keys())[0]])
         # We drop the small remainder, we could add padding
-        if total_length >= block_size:
+        if total_length >= block_size: 
             total_length = (total_length // block_size) * block_size
         # Split by chunks of max_len
         result = {

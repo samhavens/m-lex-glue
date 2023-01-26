@@ -4,29 +4,36 @@
 from typing import Tuple
 import transformers
 from torch import nn
+from transformers.models.bloom.modeling_bloom import BloomForCausalLM, BloomModel
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
 from transformers.models.gptj.modeling_gptj import GPTJForCausalLM, GPTJModel
 from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoForCausalLM, GPTNeoModel
-from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXModel, GPTNeoXForCausalLM
+from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXForCausalLM, GPTNeoXModel
+from transformers.models.opt.modeling_opt import OPTForCausalLM, OPTModel
 
 from m_lex_glue.utils import findattr
 
 
-_SUPPORTED_HF_MODELS = (
-    GPT2Model,
-    GPTJModel,
-    GPTNeoModel,
-    GPTNeoXModel,
+_DEFINITELY_SUPPORTED_HF_MODELS = (
+    BloomForCausalLM,
+    BloomModel,
     GPT2LMHeadModel,
+    GPT2Model,
     GPTJForCausalLM,
+    GPTJModel,
     GPTNeoForCausalLM,
+    GPTNeoModel,
     GPTNeoXForCausalLM,
+    GPTNeoXModel,
+    OPTForCausalLM,
+    OPTModel,
 )
 
 
-def hf_get_causal_base_model(model: transformers.AutoModelForCausalLM) -> nn.Module:
-    """Returns the causal decoder backbone of the specified HuggingFace transformers
-    model.
+def hf_get_base_model(model: transformers.AutoModelForCausalLM) -> nn.Module:
+    """Returns the backbone of the specified HuggingFace transformer model
+    (i.e. without the task-specific head)
+    
     NOTE: Different model configurations have different causal decoder attribute
     names.
         - transformer: (GPT2LMHeadModel, GPTJConfig)
@@ -78,38 +85,39 @@ def hf_get_tied_embedding_weights(model: nn.Module) -> nn.Module:
     return findattr(model, tied_embedding_attrs)
 
 
-# REWRITE THIS TO NOT USE LOOKUP!
-# Or at least add BLOOM and OPT
-# also... T5??
-# Honestly we want to support huge BERTs too, so I think this should be totally generic
-# all LM heads have weight tying
-# https://discuss.huggingface.co/t/what-is-the-tie-word-embeddings-option-exactly-doing/8483
 def is_fsdp_able(model) -> bool:
-    causal_base_model = hf_get_causal_base_model(model)
-    return isinstance(model, _SUPPORTED_HF_MODELS) or isinstance(causal_base_model, _SUPPORTED_HF_MODELS)
+    """Check if this is a known FSDP-able model"""
+    base_model = hf_get_base_model(model)
+    return (
+        isinstance(model, _DEFINITELY_SUPPORTED_HF_MODELS)
+        or isinstance(base_model, _DEFINITELY_SUPPORTED_HF_MODELS)
+    )
 
 
 def prepare_hf_model_for_fsdp(model):
     """
     Wrap any model for FSDP which follows one of the 3 existing conventions on HF for decoder only LLMs
     """
-    assert is_fsdp_able(model), f"FSDP support not available for this model"
-    causal_base_model = hf_get_causal_base_model(model)
+    if not is_fsdp_able(model):
+        print(f"attempting to FSDP wrap {model.name_or_path}, but this model has not been tested with FSDP")
+
+    causal_base_model = hf_get_base_model(model)
     model_block = hf_get_causal_hidden_layers(model)[0]
     block_type = type(model_block)
     lm_head = hf_get_causal_hidden_layers(model)
     tied_embeddings = hf_get_tied_embedding_weights(causal_base_model)
-    # When using the HF LM models,
-    # the weights of the self.lm_head and self.transformer.wte are tied.
+
+    # When using HF LM models, the weights of the self.lm_head and self.transformer.wte are tied.
     # This tying occurs inside the `self.post_init()` function.
-    # This is a hurdle for FSDP because they need to be in the same FSDP block
-    # These lines ensures that both modules stay together in the top-most block
-    if tied_embeddings is not None:
+    # This means the lm_head and wte need to be in the same FSDP block. By setting ._fsdp_wrap = False,
+    # we do not wrap those modules, so their parameters get flattened as part of the parent module,
+    # which makes sure they don't get split apart
+    if model.config.tie_word_embeddings and lm_head is not None:
         causal_base_model._fsdp_wrap = False
         tied_embeddings._fsdp_wrap = False
         lm_head._fsdp_wrap = False
 
-    # FSDP Wrap and Activation Checkpoint every GPT2Block
+    # FSDP Wrap and Activation Checkpoint every block (e.g. GPT2Block, GPTNeoBlock, etc)
     model.fsdp_wrap_fn = lambda module: isinstance(module, block_type)
     model.activation_checkpointing_fn = lambda module: isinstance(
         module, block_type)

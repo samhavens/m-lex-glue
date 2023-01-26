@@ -11,6 +11,7 @@ This version is from the mosaicGPT repo, where I am attempting to make this a HF
 """
 
 import math
+import warnings
 from functools import partial
 from typing import Any, List, Optional, Union
 
@@ -318,6 +319,11 @@ class MGPT(nn.Module):
             S <= self.cfg.max_seq_len
         ), f'Cannot forward input with seq_len={S}, this model only supports seq_len<={self.cfg.max_seq_len}'
 
+        if self.cfg.attn_impl == 'triton':
+            assert (
+                S % 128 == 0
+            ), f'Triton flash attention only works with seq_len which are a multiple of 128, but got seq_len={S}'
+
         tok_emb = self.transformer.wte(input_ids)  # type: ignore
         if self.alibi:
             x = tok_emb
@@ -343,7 +349,7 @@ class MGPT(nn.Module):
         x = self.transformer.ln_f(x)  # type: ignore
         # output embedding weight tied to input embedding
         logits = F.linear(x, self.transformer.wte.weight, None)
-        return logits
+        return logits, attn_mask
 
     # Param Initialization, needed for device='meta' fast initialization
     def param_init_fn(self, module):
@@ -537,14 +543,18 @@ class MosaicGPTForCausalLM(PreTrainedModel):
     def forward(self, *args, **kwargs):
         if "input_ids" in kwargs:
             iids = kwargs['input_ids']
+            del kwargs['input_ids']
         else:
             iids = None
+
         if "key_padding_mask" in kwargs:
             key_padding_mask = kwargs["key_padding_mask"]
+            del kwargs["key_padding_mask"]
         elif "attention_mask" in kwargs:
-            key_padding_mask = kwargs["attention_mask"]
-        if iids:
-            logits = self.model.forward(input_ids=iids, key_padding_mask=key_padding_mask)
+            key_padding_mask = kwargs['attention_mask'].bool()
+            del kwargs['attention_mask']
+        if iids is not None:
+            logits, attn_mask = self.model.forward(input_ids=iids, key_padding_mask=key_padding_mask, **kwargs)
         else:
-            logits = self.model.forward(*args, key_padding_mask=key_padding_mask)
-        return CausalLMOutput(logits=logits)
+            logits, attn_mask = self.model.forward(*args, key_padding_mask=key_padding_mask, **kwargs)
+        return CausalLMOutput(logits=logits), attn_mask

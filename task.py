@@ -106,6 +106,13 @@ def build_model(cfg: DictConfig, task: str):
     print("Model Name:", model.__class__.__name__)
     print("Metrics:", model.metrics())
     print("Vocabulary Size:", len(model.tokenizer))
+    if cfg.model.get("debug", False):
+        print("Wrapping model for debugging...")
+        from transformers.debug_utils import DebugUnderflowOverflow
+
+        # the model is a Composer model wrapping a HuggingFace model, but since they are both
+        # descendants of torch.nn.module, you can wrap them with DebugUnderflowOverflow
+        DebugUnderflowOverflow(model)
     return model
 
 
