@@ -108,37 +108,51 @@ def get_clm_preprocessor(
     summary_column = summarization[2]
 
     prefix, suffix = get_prefix_suffix(tokenizer)
-    suffix_tokens = tokenizer(suffix, truncation=False, padding=False)['input_ids']
+    suffix_tokens = tokenizer(suffix, truncation=False, padding=False, return_tensors="pt")['input_ids']
     suffix_length = len(suffix_tokens)
 
     def preprocess_clm_function(examples):
         # remove pairs where at least one record is None
-        inputs, targets = [], []
+        titles, texts, targets = [], [], []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] and examples[summary_column][i]:
-                inputs.append(examples[text_column][i])
+                texts.append(examples[text_column][i])
                 targets.append(examples[summary_column][i])
+                titles.append(examples[title_column][i])
 
-        inputs = [prefix + title_column + inp for inp in inputs]
+        inputs = []
+        for title, inp in zip(titles, texts):
+            inputs.append(prefix + " " + title + " " + inp)
+
         model_inputs = tokenizer(
             inputs,
             max_length=max_input_length - suffix_length,
             padding="max_length",
             truncation=True,
+            return_tensors="pt",
+            pad_to_multiple_of=128,
         )
 
         input_ids = model_inputs['input_ids']
         attention_mask = model_inputs['attention_mask']
 
-        suffix_tensor = suffix.repeat(input_ids.shape[0], 1)
+        suffix_tensor = suffix_tokens.repeat(input_ids.shape[0], 1)
         input_ids = torch.cat([input_ids, suffix_tensor], dim=1)
-        attention_mask = torch.cat([attention_mask, torch.ones((attention_mask.shape[0], suffix.shape[1]))], dim=1)
+        attention_mask = torch.cat([attention_mask, torch.ones((attention_mask.shape[0], suffix_tokens.shape[1]))], dim=1)
 
-        targets = target_tokenizer(targets, max_length=max_target_length, padding="max_length", truncation=True)
-
+        targets = target_tokenizer(
+            targets,
+            max_length=max_target_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+            pad_to_multiple_of=128,
+        )
+        iids = torch.cat([input_ids, targets['input_ids']], dim=1)
         result = {
-            'input_ids': torch.cat([input_ids, targets['input_ids']], dim=0),
-            'attention_mask': torch.cat([attention_mask, targets['attention_mask']], dim=0),
+            'input_ids': iids,
+            'attention_mask': torch.cat([attention_mask, targets['attention_mask']], dim=1),
+            "labels": iids.detach(),
         }
 
         # This code for producing blocks of correctly sizes CLM data did not always get the summary in
