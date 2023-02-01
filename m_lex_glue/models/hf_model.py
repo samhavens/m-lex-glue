@@ -12,8 +12,7 @@ from torchmetrics.classification.f_beta import F1Score
 from transformers import (AutoConfig, AutoModelForCausalLM,
                           AutoModelForMultipleChoice, AutoModelForSeq2SeqLM,
                           AutoModelForSequenceClassification, AutoTokenizer,
-                          BeamSearchScorer, LogitsProcessorList, MaxLengthCriteria,
-                          MinLengthLogitsProcessor, StoppingCriteriaList)
+                          LogitsProcessorList, MinLengthLogitsProcessor)
 
 from m_lex_glue.data.tasks import (multi_class, multi_label,
                                       multiple_choice_qa, summarization,
@@ -23,13 +22,14 @@ from m_lex_glue.metrics.modified_metrics import (FloatAccuracy, FloatF1,
                                                  RougeWithDetokenizer)
 from m_lex_glue.models.gpt_for_multiple_choice import (GPT2ForMultipleChoice,
                                                        GPTJForMultipleChoice)
-from m_lex_glue.models.hf_fsdp import is_fsdp_able, prepare_hf_model_for_fsdp
+from m_lex_glue.models.hf_fsdp import prepare_hf_model_for_fsdp
 
 
 class ComposerHFModelWithTokenizer(HuggingFaceModel):
     """Attach the tokenizer to the model so it is easily available to pass to the dataloader builder"""
     def __init__(self, *args, train_metrics=None, eval_metrics=None, **kwargs):
         self.tokenizer = kwargs['tokenizer']
+
         super().__init__(*args, **kwargs)
         self.train_metrics = {metric.__class__.__name__: metric for metric in train_metrics}  # type: ignore
         if eval_metrics:
@@ -49,20 +49,12 @@ class RougeableComposerHFModel(ComposerHFModelWithTokenizer):
     def __init__(
         self,
         *args,
-        min_length: int = 50,
         max_length: int = 512,
-        num_beams: int = 1,
-        do_sample: bool = False,
+        do_sample: bool = True,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.logits_processor = LogitsProcessorList(
-            [
-                MinLengthLogitsProcessor(min_length, eos_token_id=self.model.config.eos_token_id),
-            ]
-        )
         self.max_length = max_length
-        self.num_beams = num_beams
         self.do_sample = do_sample
 
     def eval_forward(self, batch, outputs: Optional[Any] = None):
@@ -84,35 +76,15 @@ class RougeableComposerHFModel(ComposerHFModelWithTokenizer):
         else:
             # "seq2seq" mode
 
-            # # beam search settings
-            # outputs = self.model.generate(
-            #     batch['input_ids'],
-            #     max_new_tokens=self.max_length,
-            #     num_beams=self.num_beams,
-            #     do_sample=self.do_sample,
-            #     num_return_sequences=1,
-            #     remove_invalid_values=True,
-            #     logits_processor=self.logits_processor,
-            # )
-
             # nucleus / topk sampling:
             outputs = self.model.generate(
                 batch['input_ids'],
                 max_new_tokens=self.max_length,
-                do_sample=True,
+                do_sample=self.do_sample,
                 top_p=0.90,
                 top_k=0,
                 no_repeat_ngram_size=3,
             )
-
-            # # contrastive decoding settings
-            # # VERY slow, need to verify if there is any gain
-            # outputs = self.model.generate(
-            #     batch['input_ids'],
-            #     max_new_tokens=self.max_length,
-            #     penalty_alpha=0.6,
-            #     top_k=5,
-            # )
 
             return outputs
 

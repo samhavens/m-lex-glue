@@ -140,12 +140,13 @@ def main(cfg: DictConfig) -> None:
 
     # Dataloaders
     drop_last = cfg.get("drop_last", False)
+    truncate = 'alibi' if cfg.model.get('alibi', False) else True
 
     print("Building eval loader...")
     if task == "billsum":
         eval_clm_dataset = create_clm_dataset(task, model.tokenizer, split="test", max_seq_length=cfg.max_seq_length)
-        eval_sum_dataset = create_summarization_dataset(task, model.tokenizer, split="test", max_seq_length=cfg.max_seq_length)
-        eval_loader = build_summarization_dataloaders(eval_clm_dataset, eval_sum_dataset, device_eval_batch_size, drop_last=drop_last)
+        eval_sum_dataset = create_summarization_dataset(task, model.tokenizer, split="test", truncate=truncate, max_seq_length=cfg.max_seq_length)
+        eval_loader = build_summarization_dataloaders(eval_clm_dataset, eval_sum_dataset, device_eval_batch_size, drop_last=drop_last, shuffle=False)
         print("Building train loader...")
         train_dataset = create_clm_dataset(task, model.tokenizer, split="train", max_seq_length=cfg.max_seq_length)
     else:

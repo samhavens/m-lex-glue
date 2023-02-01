@@ -5,6 +5,7 @@ from typing import List, Tuple, Union, cast
 
 import datasets
 import numpy as np
+import torch
 import transformers
 from composer.core import Evaluator
 from composer.core.types import Dataset
@@ -33,17 +34,21 @@ def get_prefix_suffix(tokenizer) -> Tuple[str, str]:
         prefix = "summarize: "
         suffix = "\n"
     elif model_style == "gpt":
-        # prefix = ""
-        # suffix = " TL;DR "
+        prefix = ""
+        suffix = " TL;DR "
         # suffix is a pain to implement with truncation and padding, use t5-style for now
-        prefix = "SUMMARIZE: "
-        suffix = "\nSUMMARY: "
     else:
         prefix, suffix = "", ""
     return prefix, suffix
 
 
-def get_summarization_preprocessor(tokenizer, max_seq_length):
+def get_summarization_preprocessor(
+    tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+    target_tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+    max_input_length: int,
+    padding: bool,
+    max_target_length: int = 1024,
+    ):
     """BillSum https://arxiv.org/pdf/1910.00523.pdf
     The BillSum corpus focuses on mid-length legislation from 5,000 to 20,000 character in length
     Summaries are ~200 to 5,000 characters"""
@@ -62,30 +67,49 @@ def get_summarization_preprocessor(tokenizer, max_seq_length):
 
         inputs = [prefix + inp + suffix for inp in inputs]
 
-        model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
+        # for ALiBi models eval we don't want to truncate
+        # but want to pad to multiple of 128 for triton
+        if padding == True:
+            model_inputs = tokenizer(inputs, max_length=max_input_length, padding="longest", truncation=False, pad_to_multiple_of=128)
+        else:
+            model_inputs = tokenizer(inputs, max_length=max_input_length, padding=False, truncation=False)
 
-        # for ALiBi models we don't want to truncate
-        # pad to multiple of 128 for triton
-        # labels = tokenizer(targets, max_length=max_seq_length, padding="longest", truncation=False, pad_to_multiple_of=128)
-        labels = tokenizer(targets, max_length=max_seq_length, padding="max_length", truncation=True)
 
+        if padding == True:
+            labels = target_tokenizer(targets, max_length=max_target_length, padding="longest", truncation=False, pad_to_multiple_of=128)
+        else:
+            labels = target_tokenizer(targets, max_length=max_target_length, padding=False, truncation=False)
+
+
+        # Since this is only used for eval now, we shouldn't need to mess with the pad token IDs
         # replace all tokenizer.pad_token_id in the labels by -100 to
         # ignore padding in the loss
         labels["input_ids"] = [
-            [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+            [(l if l != target_tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
         ]
-
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs
 
     return preprocess_summary_function
 
 
-def get_clm_preprocessor(tokenizer, max_seq_length):
+def get_clm_preprocessor(
+    tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+    target_tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+    max_input_length: int,
+    max_target_length: int = 768,  # ~98% of all summaries < this
+    ):
+    """Higher-order function so we end up with a unary preprocessing function
+
+    which is what datasets.map expects
+    """
+    title_column = summarization[0]
     text_column = summarization[1]
     summary_column = summarization[2]
 
     prefix, suffix = get_prefix_suffix(tokenizer)
+    suffix_tokens = tokenizer(suffix, truncation=False, padding=False)['input_ids']
+    suffix_length = len(suffix_tokens)
 
     def preprocess_clm_function(examples):
         # remove pairs where at least one record is None
@@ -95,27 +119,45 @@ def get_clm_preprocessor(tokenizer, max_seq_length):
                 inputs.append(examples[text_column][i])
                 targets.append(examples[summary_column][i])
 
-        inputs = [prefix + inp + suffix for inp in inputs]
-        # for ALiBi models we don't want to truncate
-        # pad to multiple of 128 for triton
-        # model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="longest", truncation=False, pad_to_multiple_of=128)
-        model_inputs = tokenizer(inputs, max_length=max_seq_length, padding="max_length", truncation=True)
+        inputs = [prefix + title_column + inp for inp in inputs]
+        model_inputs = tokenizer(
+            inputs,
+            max_length=max_input_length - suffix_length,
+            padding="max_length",
+            truncation=True,
+        )
 
-        # @TODO make this configurable
-        # WHY DOES THIS CAUSE ROUGE TO FAIL if we use model max length??
-        # might be a CPU-only error
-        block_size = max_seq_length # tokenizer.model_max_length # 512  # 2048
-        concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
-        total_length = len(concatenated_examples[list(model_inputs.keys())[0]])
-        # We drop the small remainder, we could add padding
-        if total_length >= block_size: 
-            total_length = (total_length // block_size) * block_size
-        # Split by chunks of max_len
+        input_ids = model_inputs['input_ids']
+        attention_mask = model_inputs['attention_mask']
+
+        suffix_tensor = suffix.repeat(input_ids.shape[0], 1)
+        input_ids = torch.cat([input_ids, suffix_tensor], dim=1)
+        attention_mask = torch.cat([attention_mask, torch.ones((attention_mask.shape[0], suffix.shape[1]))], dim=1)
+
+        targets = target_tokenizer(targets, max_length=max_target_length, padding="max_length", truncation=True)
+
         result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
+            'input_ids': torch.cat([input_ids, targets['input_ids']], dim=0),
+            'attention_mask': torch.cat([attention_mask, targets['attention_mask']], dim=0),
         }
-        result["labels"] = result["input_ids"].copy()
+
+        # This code for producing blocks of correctly sizes CLM data did not always get the summary in
+        # which feels like it was messing things up
+
+        # # WHY DOES THIS CAUSE ROUGE TO FAIL if we use model max length??
+        # # might be a CPU-only error
+        # block_size = max_input_length # tokenizer.model_max_length # 512  # 2048
+        # concatenated_examples = {k: list(chain(*model_inputs[k])) for k in model_inputs.keys()}
+        # total_length = len(concatenated_examples[list(model_inputs.keys())[0]])
+        # # We drop the small remainder, we could add padding
+        # if total_length >= block_size:
+        #     total_length = (total_length // block_size) * block_size
+        # # Split by chunks of max_len
+        # result = {
+        #     k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+        #     for k, t in concatenated_examples.items()
+        # }
+        # result["labels"] = result["input_ids"].copy()
 
         return result
 
@@ -147,7 +189,15 @@ def create_clm_dataset(
 
     assert isinstance(dataset, datasets.Dataset)
 
-    pre_process_fn = get_clm_preprocessor(tokenizer, max_seq_length)
+    target_tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer.name_or_path, padding_side='right')
+    if target_tokenizer.pad_token is None:
+        target_tokenizer.pad_token = target_tokenizer.eos_token
+
+    pre_process_fn = get_clm_preprocessor(
+        tokenizer=tokenizer,
+        target_tokenizer=target_tokenizer,
+        max_input_length=7296, # specific to model / tokenizer
+        )
     dataset = dataset.map(
         pre_process_fn,
         batched=True,
@@ -164,11 +214,14 @@ def create_summarization_dataset(
     task: str,
     tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
     split: str,
+    padding: bool,
     max_seq_length: int = 512,
     max_retries: int = 10,
     num_workers: int = 0,
 ):
-    """Needs to be cleaned up, is the same fn as create_clm_dataset but for the preprocessor"""
+    """Needs to be cleaned up, is the same fn as create_clm_dataset but for the preprocessor
+
+    Only used for eval!"""
     if (max_seq_length % 8) != 0:
         log.warning('For performance, a max_seq_length as a multiple of 8 is recommended.')
 
@@ -185,7 +238,17 @@ def create_summarization_dataset(
 
     assert isinstance(dataset, datasets.Dataset)
 
-    pre_process_fn = get_summarization_preprocessor(tokenizer, max_seq_length)
+    # for seq2seq task, the target tokenizer will be right_padded, vs left-padded for gpt2 tokenizer for inputs
+    target_tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer.name_or_path, padding_side='right')
+    if target_tokenizer.pad_token is None:
+        target_tokenizer.pad_token = target_tokenizer.eos_token
+
+    pre_process_fn = get_summarization_preprocessor(
+        tokenizer=tokenizer,
+        target_tokenizer=target_tokenizer,
+        max_input_length=max_seq_length,
+        padding=padding,
+    )
     dataset = dataset.map(
         pre_process_fn,
         batched=True,
@@ -213,6 +276,7 @@ def build_summarization_dataloaders(
     summarization_dataset,
     device_batch_size,
     drop_last=False,
+    shuffle=True,
     **kwargs
 ) -> List[Evaluator]:
     """Build the evaluation sets for summarization.
@@ -231,7 +295,7 @@ def build_summarization_dataloaders(
     clm_dl =  DataLoader(
         dataset=clm_dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(clm_dataset, drop_last=drop_last, shuffle=False),
+        sampler=dist.get_sampler(clm_dataset, drop_last=drop_last, shuffle=shuffle),
         collate_fn=functools.partial(labeled_collate, mode='clm'),
         **kwargs,
     )
@@ -239,7 +303,7 @@ def build_summarization_dataloaders(
     sum_dl =  DataLoader(
         dataset=clm_dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(clm_dataset, drop_last=drop_last, shuffle=False),
+        sampler=dist.get_sampler(clm_dataset, drop_last=drop_last, shuffle=shuffle),
         collate_fn=functools.partial(labeled_collate, mode='seq2seq'),
         **kwargs,
     )
