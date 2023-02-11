@@ -2,6 +2,16 @@
 
 This repo uses the [Mosaic CLI](https://internal.mcli.docs.mosaicml.com/index.html) to run [lex-GLUE](https://huggingface.co/datasets/lex_glue) fine-tuning and evaluation on the Mosaic Cloud.
 
+This repo is not well-named, as it also includes the [BillSum](https://huggingface.co/datasets/billsum) legal summarization task. It also should probably include the code for converting Pile of Law to MDS format and creating the custom tokenizer.
+
+## Tasks and Model compatibility
+
+TBD
+
+## Known Issues
+
+TBD
+
 ## Debugging
 
 For ROUGE to work, you have to install nltk (in requirements, not hard) and download punkt. From shell:
