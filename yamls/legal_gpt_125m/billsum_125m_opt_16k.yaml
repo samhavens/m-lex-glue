@@ -1,0 +1,98 @@
+run_name: &run_name billsum_125m_opt_16k
+gpu_type: a100_80gb
+gpu_num: 8
+platform: r1z1
+image: mosaicml/composer:0.12.0
+integrations:
+  - integration_type: "wandb"
+    project: &wandb_project lex-glue
+    entity: mosaic-ml
+  - integration_type: "git_repo" # use local integration!
+    git_repo: samhavens/m-lex-glue
+    git_branch: main
+# in the following command we download NLTK data to /usr/share/nltk_data which is the default location on Unix
+# Rouge score calculation fails without it, so it is necessary for summarization evaluation
+command: >-
+  set -e -x;
+  cd m-lex-glue;
+  pip install -r requirements.txt;
+  python -c "import nltk;nltk.download('punkt')";
+  composer task.py /mnt/config/parameters.yaml
+optimization_level: 0
+parameters:
+  task: &task billsum
+  max_seq_length: &max_seq_length 15360 # 16384 - 1024
+  model_type: mosaic
+  model_name: &model_name legalgpt-125m
+  tokenizer_name: &tokenizer_name facebook/opt-125m
+  # Run Name
+  run_name: *run_name
+  # Model
+  model:
+    summary_max_length: 1024
+    name: *model_name
+    tokenizer_name: *tokenizer_name
+    device: cpu
+    d_model: 768
+    n_heads: 12
+    n_layers: 12
+    mlp_ratio: 4
+    max_seq_len: *max_seq_length
+    vocab_size: 50272
+    init_std: 0.02
+    attn_pdrop: 0.0
+    resid_pdrop: 0.0
+    emb_pdrop: 0.0
+    attn_impl: triton
+    alibi: true
+
+  scheduler:
+    name: linear_decay_with_warmup
+    t_warmup: 0.08dur
+    alpha_f: 0.2
+
+  # haven't checked these values
+  optimizer:
+    name: decoupled_adamw
+    lr: 1.0e-4
+    betas:
+      - 0.9
+      - 0.98
+    eps: 1.0e-06
+    weight_decay: 1.0e-5 # Amount of weight decay regularization
+
+  # again, untested
+  max_duration: 10ep
+  eval_interval: 1ep
+
+  global_train_batch_size: 64
+  global_eval_batch_size: 64
+
+  # System
+  seed: 42
+  grad_accum: auto
+  precision: bf16
+  # Logging
+  progress_bar: true
+  log_to_console: true
+  callbacks:
+    speed_monitor:
+      window_size: 500
+    lr_monitor: {}
+  loggers:
+    wandb: {}
+  # Checkpoint to local filesystem or remote object store
+  save_interval: 1ep
+  save_num_checkpoints_to_keep: 1
+  save_folder: s3://mosaicml-internal-checkpoints-shared/sam/lex-glue/${task}/${model_name}/${run_name}/checkpoints
+
+  starting_checkpoint_load_path: s3://mosaicml-internal-checkpoints-shared/sam/legalgpt/opt-125m-pile-16k-flash/checkpoints/ep0-ba1500-rank0.pt
+  local_pretrain_checkpoints_folder: /tmp/checkpoints/lgtp-125m-opt
+
+  fsdp_config:
+    sharding_strategy: FULL_SHARD
+    min_params: 2e12 # don't use
+    mixed_precision: DEFAULT
+    activation_checkpointing: true
+    activation_cpu_offload: false
+    verbose: true
