@@ -6,11 +6,12 @@ This repo is not well-named, as it also includes the [BillSum](https://huggingfa
 
 ## Tasks and Model compatibility
 
-TBD
+Most of the tasks use task-specific classification heads. Some models, including MosaicGPT, don't have that implemented yet. We either need to write prompt templates, so all tasks can be done as language modeling tasks, or write the MosaicGPT task specific heads.
 
 ## Known Issues
 
-TBD
+* Causal LM implementation (used for summarization training) is broken. I was bringing in the code from `examples/llm` and it has errors.
+* There are bugs in the summarization dataloader as well... Since we are using 16k seq len now, we should just be able to concat together document and summary and toss anything too long (should be only 1-3 documents)
 
 ## Debugging
 
