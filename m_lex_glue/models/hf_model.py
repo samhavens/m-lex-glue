@@ -248,7 +248,7 @@ def get_huggingface_model(cfg: DictConfig):
             max_length=cfg.get(
                 "summary_max_length",
                 512),  # limited by min(corpus_max, model_max_length)
-            do_sample=cfg.get("summary_do_sample", False),
+            do_sample=cfg.get("summary_do_sample", True),
         )
     else:
         return HuggingFaceModel(model=model,
